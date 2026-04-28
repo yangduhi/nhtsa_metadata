@@ -47,8 +47,9 @@ Default verification must not call live NHTSA services.
 
 ## Manual Live Validation
 
-Manual live validation is planned for Phase 7. Until then, live access remains disabled by
-default and is not used by tests, verify scripts, or harness scripts.
+Manual live validation remains disabled by default and is not used by tests, verify scripts, or
+harness scripts. Bounded live validation requires both `--allow-live` and
+`NHTSA_METADATA_ALLOW_LIVE=true`.
 
 ## Project Layout
 

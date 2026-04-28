@@ -18,15 +18,23 @@ from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.coverage_service import CoverageService
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
+from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
 from nhtsa_metadata.services.scale_readiness import ScaleReadinessService
+from nhtsa_metadata.services.schema_audit import SchemaAuditService, report_to_dict
+from nhtsa_metadata.sources.nhtsa_crash.live_client import (
+    LiveAccessNotAllowedError,
+    LiveNhtsaClient,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=False)
 catalog_app = typer.Typer(add_completion=False)
 coverage_app = typer.Typer(add_completion=False)
 scale_app = typer.Typer(add_completion=False)
+schema_app = typer.Typer(add_completion=False)
 app.add_typer(catalog_app, name="catalog")
 app.add_typer(coverage_app, name="coverage")
 app.add_typer(scale_app, name="scale")
+app.add_typer(schema_app, name="schema")
 console = Console()
 
 
@@ -116,6 +124,32 @@ def catalog_collect(
     console.print(json.dumps(result.__dict__, sort_keys=True))
 
 
+@catalog_app.command("build-manifest")
+def catalog_build_manifest(
+    output: Annotated[Path, typer.Option("--output")],
+    source: Annotated[str, typer.Option("--source")] = "live",
+    allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
+    limit: Annotated[int, typer.Option("--limit")] = 40,
+    max_per_configuration: Annotated[int, typer.Option("--max-per-configuration")] = 5,
+    max_discovery_pages: Annotated[int, typer.Option("--max-discovery-pages")] = 5,
+    discovery_page_size: Annotated[int, typer.Option("--discovery-page-size")] = 100,
+) -> None:
+    if source != "live":
+        raise typer.BadParameter("build-manifest currently supports --source live only")
+    if not allow_live:
+        raise LiveAccessNotAllowedError("--source live requires --allow-live")
+    settings = _effective_settings(None)
+    client = LiveNhtsaClient(settings, allow_live=allow_live)
+    report = StratifiedManifestBuilder(client).build(
+        output=output,
+        limit=limit,
+        max_per_configuration=max_per_configuration,
+        max_discovery_pages=max_discovery_pages,
+        discovery_page_size=discovery_page_size,
+    )
+    console.print(json.dumps(report.__dict__, sort_keys=True))
+
+
 @catalog_app.command("rebuild")
 def catalog_rebuild(
     test_no: Annotated[int, typer.Option("--test-no")],
@@ -162,6 +196,21 @@ def scale_report(
     with session_factory() as session:
         report = ScaleReadinessService(session).report()
     console.print(json.dumps(report.__dict__, sort_keys=True, default=str))
+
+
+@schema_app.command("audit")
+def schema_audit(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        payload = report_to_dict(SchemaAuditService(session).report())
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    console.print(encoded)
 
 
 def _session_factory(database_url: str | None):

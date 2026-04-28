@@ -40,11 +40,14 @@ Canonical domain tables include lineage columns where rows are derived from raw 
 ## Read Model
 
 - `test_filter_summary`
+- `test_classification`
 - `test_facets`
 - `asset_summary`
 - `field_coverage_snapshots`
 
 Read models are rebuildable derivatives, not source of truth.
+`test_classification` stores derived crash-test family fields such as impact direction,
+counterparty kind, and classification status.
 
 ## Migration
 

@@ -18,8 +18,26 @@ The harness delegates to `scripts/verify.ps1` in Phase 0.
 
 ## Live API Policy
 
-Live API access is disabled by default. Phase 7 will introduce a manual validation command that
-requires explicit live opt-in. Default tests and verification scripts must remain fixture/mock only.
+Live API access is disabled by default. Manual live validation commands require explicit live
+opt-in. Default tests and verification scripts must remain fixture/mock only.
+
+## Bounded Pilot Commands
+
+```powershell
+.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog build-manifest `
+  --source live `
+  --allow-live `
+  --output data\stratified_live_pilot_manifest.csv `
+  --limit 40 `
+  --max-per-configuration 5
+
+powershell -ExecutionPolicy Bypass -File scripts\live_pilot_validate.ps1 `
+  -AllowLive `
+  -DatabaseUrl sqlite:///data/stratified_live_pilot.sqlite `
+  -Manifest data/stratified_live_pilot_manifest.csv
+```
+
+The pilot remains bounded by manifest and must not be treated as a full crawler.
 
 ## Source Contract Documents
 

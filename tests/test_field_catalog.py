@@ -12,3 +12,4 @@ def test_field_catalog_marks_unknown_fields() -> None:
         "test_detail", "test_detail", {"unknown": "value"}, "$.results[0]"
     )
     assert observations[0].mapping_status == "unmapped"
+    assert observations[0].field_path == "$.results[*].unknown"

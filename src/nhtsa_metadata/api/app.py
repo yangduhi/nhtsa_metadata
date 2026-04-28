@@ -7,6 +7,7 @@ from nhtsa_metadata.db.models import (
     CollectionRun,
     CrashTest,
     MediaAsset,
+    TestClassification,
     TestFacet,
     TestFilterSummary,
     TestParticipant,
@@ -67,6 +68,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 session.scalars(select(TestParticipant).where(TestParticipant.test_id == test.id))
             )
             assets = list(session.scalars(select(MediaAsset).where(MediaAsset.test_id == test.id)))
+            classification = session.scalar(
+                select(TestClassification).where(TestClassification.test_id == test.id)
+            )
             payload: dict[str, object] = {
                 "found": True,
                 "test": {
@@ -85,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     }
                     for vehicle in vehicles
                 ],
+                "test_classification": _classification_out(classification),
                 "test_participants": [
                     {
                         "participant_kind": participant.participant_kind,
@@ -155,6 +160,22 @@ def _summary_out(summary: TestFilterSummary) -> dict[str, object]:
         "participant_kinds": summary.participant_kinds_json or [],
         "asset_kinds": summary.asset_kinds_json or [],
         "has_uds_or_tdms_package": summary.has_uds_or_tdms_package,
+    }
+
+
+def _classification_out(classification: TestClassification | None) -> dict[str, object] | None:
+    if classification is None:
+        return None
+    return {
+        "source_test_configuration_key": classification.source_test_configuration_key,
+        "source_test_configuration": classification.source_test_configuration,
+        "impact_angle": float(classification.impact_angle)
+        if classification.impact_angle is not None
+        else None,
+        "impact_direction": classification.impact_direction,
+        "counterparty_kind": classification.counterparty_kind,
+        "test_family": classification.test_family,
+        "classification_status": classification.classification_status,
     }
 
 

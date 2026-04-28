@@ -31,6 +31,12 @@ def test_instrumentation_endpoint_is_paginated() -> None:
     assert endpoint.default_count == 20
 
 
+def test_discovery_endpoint_is_paginated_for_manifest_building() -> None:
+    endpoint = ENDPOINT_BY_NAME["test_results"]
+    assert endpoint.is_paginated is True
+    assert endpoint.default_count == 100
+
+
 def test_test_detail_is_optional_core() -> None:
     endpoint = ENDPOINT_BY_NAME["test_detail"]
     assert endpoint.endpoint_group == "core_optional"

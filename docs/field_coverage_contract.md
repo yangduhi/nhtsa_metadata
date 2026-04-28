@@ -20,3 +20,6 @@ Minimum report columns:
 - `mapped_table`
 - `mapped_column`
 - `example_values`
+
+Field paths are normalized with wildcard array indexes for coverage aggregation, for example
+`$.results[0].vehicleNo` is reported as `$.results[*].vehicleNo`.

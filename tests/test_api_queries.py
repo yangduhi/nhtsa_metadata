@@ -34,6 +34,7 @@ def test_get_test_detail_excludes_raw_by_default(tmp_settings: Settings) -> None
     assert body["found"] is True
     assert "raw_payloads" not in body
     assert body["media_assets"]
+    assert body["test_classification"]["test_family"] == "frontal_barrier"
 
 
 def test_filter_options_are_db_driven(tmp_settings: Settings) -> None:

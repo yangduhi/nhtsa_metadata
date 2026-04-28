@@ -4,7 +4,7 @@ Base URL: `https://nrd.api.nhtsa.dot.gov/nhtsa/vehicle/api/v1`
 
 | name | group | path | paginated | required baseline | allow empty |
 |---|---|---|---:|---:|---:|
-| test_results | discovery | `/vehicle-database-test-results` | no | yes | yes |
+| test_results | discovery | `/vehicle-database-test-results` | yes | yes | yes |
 | search | discovery | `/vehicle-database-test-results/by-search` | no | yes | yes |
 | search_vehicle | discovery_optional | `/vehicle-database-test-results/by-search-vehicle` | no | no | yes |
 | search_barrier | discovery_optional | `/vehicle-database-test-results/by-search-barrier` | no | no | yes |

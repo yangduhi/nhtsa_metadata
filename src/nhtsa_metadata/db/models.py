@@ -437,6 +437,24 @@ class TestFilterSummary(TimestampMixin, Base):
     has_uds_or_tdms_package: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
 
 
+class TestClassification(TimestampMixin, Base):
+    __tablename__ = "test_classification"
+    __test__ = False
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), unique=True, nullable=False)
+    test_no: Mapped[int] = sa_mapped_column(Integer, unique=True, nullable=False, index=True)
+    source_test_configuration_key: Mapped[str | None] = sa_mapped_column(
+        String(64), nullable=True
+    )
+    source_test_configuration: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    impact_angle: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    impact_direction: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    counterparty_kind: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    test_family: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+
+
 class TestFacet(TimestampMixin, Base):
     __tablename__ = "test_facets"
     __table_args__ = (UniqueConstraint("facet_name", "facet_value"),)
@@ -492,6 +510,7 @@ __all__ = [
     "SourcePayloadSection",
     "TestFacet",
     "TestFilterSummary",
+    "TestClassification",
     "TestParticipant",
     "Vehicle",
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from nhtsa_metadata.sources.nhtsa_crash.contracts import FieldObservation
@@ -20,7 +21,7 @@ def observe_fields(
             FieldObservation(
                 endpoint_name=endpoint_name,
                 section_name=section_name,
-                field_path=f"{json_path}.{key}",
+                field_path=normalize_field_path(f"{json_path}.{key}"),
                 observed_type=type(value).__name__,
                 is_non_null=value is not None,
                 example_value=value,
@@ -30,3 +31,7 @@ def observe_fields(
             )
         )
     return observations
+
+
+def normalize_field_path(field_path: str) -> str:
+    return re.sub(r"\[\d+\]", "[*]", field_path)

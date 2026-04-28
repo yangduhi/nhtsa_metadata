@@ -1,9 +1,11 @@
 from sqlalchemy import select
 
 from nhtsa_metadata.db.models import (
+    Barrier,
     CollectionRun,
     CrashTest,
     MediaAsset,
+    TestClassification,
     TestParticipant,
     Vehicle,
 )
@@ -30,6 +32,19 @@ def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> Non
             for participant in session.scalars(select(TestParticipant))
         )
         assert session.scalars(select(MediaAsset)).first() is not None
+        assert _duplicate_vehicle_groups(session) == []
+        assert _duplicate_participant_groups(session) == []
+        assert _duplicate_barrier_groups(session) == []
+        classifications = {
+            row.test_no: row
+            for row in session.scalars(
+                select(TestClassification).order_by(TestClassification.test_no)
+            )
+        }
+        assert classifications[10001].test_family == "frontal_barrier"
+        assert classifications[10001].counterparty_kind == "barrier"
+        assert classifications[10003].test_family == "side_impactor"
+        assert classifications[10003].counterparty_kind == "impactor_vehicle"
 
 
 def test_collection_run_records_requested_live_provenance_without_http(tmp_settings) -> None:  # type: ignore[no-untyped-def]
@@ -47,3 +62,33 @@ def test_collection_run_records_requested_live_provenance_without_http(tmp_setti
         assert run.allow_live is True
         assert run.finished_at is not None
         assert run.database_url_sanitized == settings.database_url
+
+
+def _duplicate_vehicle_groups(session) -> list[tuple[object, ...]]:  # type: ignore[no-untyped-def]
+    groups: dict[tuple[object, ...], int] = {}
+    for row in session.scalars(select(Vehicle)):
+        key = (row.test_no, row.source_vehicle_no)
+        groups[key] = groups.get(key, 0) + 1
+    return [key for key, count in groups.items() if count > 1]
+
+
+def _duplicate_participant_groups(session) -> list[tuple[object, ...]]:  # type: ignore[no-untyped-def]
+    groups: dict[tuple[object, ...], int] = {}
+    tests = {row.id: row.test_no for row in session.scalars(select(CrashTest))}
+    for row in session.scalars(select(TestParticipant)):
+        key = (
+            tests[row.test_id],
+            row.participant_kind,
+            row.source_vehicle_no,
+            row.display_name,
+        )
+        groups[key] = groups.get(key, 0) + 1
+    return [key for key, count in groups.items() if count > 1]
+
+
+def _duplicate_barrier_groups(session) -> list[tuple[object, ...]]:  # type: ignore[no-untyped-def]
+    groups: dict[tuple[object, ...], int] = {}
+    for row in session.scalars(select(Barrier)):
+        key = (row.test_no, row.source_barrier_no, row.rigidity, row.shape, row.angle_raw)
+        groups[key] = groups.get(key, 0) + 1
+    return [key for key, count in groups.items() if count > 1]

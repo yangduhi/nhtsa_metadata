@@ -9,6 +9,7 @@ from nhtsa_metadata.db.models import (
     AssetSummary,
     CrashTest,
     MediaAsset,
+    TestClassification,
     TestFacet,
     TestFilterSummary,
     TestParticipant,
@@ -25,6 +26,9 @@ class ReadModelBuilder:
         if test is None:
             return
         self.session.execute(delete(TestFilterSummary).where(TestFilterSummary.test_id == test.id))
+        self.session.execute(
+            delete(TestClassification).where(TestClassification.test_id == test.id)
+        )
         self.session.execute(delete(AssetSummary).where(AssetSummary.test_id == test.id))
         vehicles = list(self.session.scalars(select(Vehicle).where(Vehicle.test_id == test.id)))
         assets = list(self.session.scalars(select(MediaAsset).where(MediaAsset.test_id == test.id)))
@@ -32,6 +36,10 @@ class ReadModelBuilder:
             self.session.scalars(select(TestParticipant).where(TestParticipant.test_id == test.id))
         )
         asset_kinds = sorted({asset.asset_kind for asset in assets})
+        impact_angle = float(test.impact_angle) if test.impact_angle is not None else None
+        impact_direction = _impact_direction(impact_angle)
+        counterparty_kind = _counterparty_kind(participants)
+        test_family = _test_family(impact_direction, counterparty_kind)
         self.session.add(
             TestFilterSummary(
                 test_id=test.id,
@@ -50,6 +58,19 @@ class ReadModelBuilder:
                 ),
                 asset_kinds_json=asset_kinds,
                 has_uds_or_tdms_package=bool({"uds", "tdms"} & set(asset_kinds)),
+            )
+        )
+        self.session.add(
+            TestClassification(
+                test_id=test.id,
+                test_no=test.test_no,
+                source_test_configuration_key=test.test_configuration_key,
+                source_test_configuration=test.test_configuration,
+                impact_angle=test.impact_angle,
+                impact_direction=impact_direction,
+                counterparty_kind=counterparty_kind,
+                test_family=test_family,
+                classification_status=_classification_status(test_family),
             )
         )
         for asset_kind, count in self.session.execute(
@@ -101,3 +122,44 @@ def _min_or_none(values: Iterable[int | None]) -> int | None:
 def _max_or_none(values: Iterable[int | None]) -> int | None:
     valid = [value for value in values if value is not None]
     return max(valid) if valid else None
+
+
+def _impact_direction(angle: float | None) -> str:
+    if angle is None:
+        return "unknown"
+    normalized = angle % 360
+    if normalized <= 45 or normalized >= 315:
+        return "frontal"
+    if 45 < normalized < 135 or 225 < normalized < 315:
+        return "side"
+    if 135 <= normalized <= 225:
+        return "rear"
+    return "unknown"
+
+
+def _counterparty_kind(participants: list[TestParticipant]) -> str:
+    kinds = {participant.participant_kind for participant in participants}
+    if "barrier" in kinds:
+        return "barrier"
+    if "impactor_vehicle" in kinds:
+        return "impactor_vehicle"
+    subject_count = sum(
+        1 for participant in participants if participant.participant_kind == "subject_vehicle"
+    )
+    if subject_count >= 2:
+        return "vehicle"
+    return "unknown"
+
+
+def _test_family(impact_direction: str, counterparty_kind: str) -> str:
+    if impact_direction == "frontal" and counterparty_kind == "barrier":
+        return "frontal_barrier"
+    if impact_direction == "side" and counterparty_kind == "impactor_vehicle":
+        return "side_impactor"
+    if impact_direction in {"frontal", "side", "rear"}:
+        return impact_direction
+    return "unknown"
+
+
+def _classification_status(test_family: str) -> str:
+    return "classified" if test_family != "unknown" else "needs_review"

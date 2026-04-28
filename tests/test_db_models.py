@@ -26,6 +26,7 @@ def test_schema_contains_required_tables(tmp_settings: Settings) -> None:
         "instrumentation_channels",
         "media_assets",
         "test_filter_summary",
+        "test_classification",
     } <= tables
 
 

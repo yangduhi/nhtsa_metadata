@@ -123,7 +123,10 @@ class CanonicalUpsertService:
         model = MODEL_BY_TABLE.get(spec.table_name)
         if model is None:
             return None
-        if self._existing_unique_row(test_id, spec) is not None:
+        existing = self._existing_unique_row(test_id, spec)
+        if existing is not None:
+            self._merge_non_null_values(existing, spec)
+            self._attach_source(existing, source_payload_id, spec)
             return None
         values = dict(spec.values)
         values.update(_lineage_values(source_payload_id, spec))
@@ -148,6 +151,70 @@ class CanonicalUpsertService:
         return row
 
     def _existing_unique_row(self, test_id: int, spec: CanonicalRowSpec) -> object | None:
+        if spec.table_name == "vehicles":
+            source_vehicle_no = spec.values.get("source_vehicle_no")
+            if source_vehicle_no is not None:
+                return self.session.scalar(
+                    select(Vehicle).where(
+                        Vehicle.test_id == test_id,
+                        Vehicle.source_vehicle_no == source_vehicle_no,
+                    )
+                )
+            return self.session.scalar(
+                select(Vehicle).where(
+                    Vehicle.test_id == test_id,
+                    Vehicle.make == spec.values.get("make"),
+                    Vehicle.model == spec.values.get("model"),
+                    Vehicle.model_year == spec.values.get("model_year"),
+                )
+            )
+        if spec.table_name == "barriers":
+            source_barrier_no = spec.values.get("source_barrier_no")
+            if source_barrier_no is not None:
+                return self.session.scalar(
+                    select(Barrier).where(
+                        Barrier.test_id == test_id,
+                        Barrier.source_barrier_no == source_barrier_no,
+                    )
+                )
+            return self.session.scalar(
+                select(Barrier).where(
+                    Barrier.test_id == test_id,
+                    Barrier.rigidity == spec.values.get("rigidity"),
+                    Barrier.shape == spec.values.get("shape"),
+                    Barrier.angle_raw == spec.values.get("angle_raw"),
+                )
+            )
+        if spec.table_name == "test_participants":
+            participant_kind = spec.values.get("participant_kind")
+            source_vehicle_no = spec.values.get("source_vehicle_no")
+            if source_vehicle_no is not None:
+                return self.session.scalar(
+                    select(TestParticipant).where(
+                        TestParticipant.test_id == test_id,
+                        TestParticipant.participant_kind == participant_kind,
+                        TestParticipant.source_vehicle_no == source_vehicle_no,
+                    )
+                )
+            display_name = spec.values.get("display_name")
+            if display_name is not None:
+                return self.session.scalar(
+                    select(TestParticipant).where(
+                        TestParticipant.test_id == test_id,
+                        TestParticipant.participant_kind == participant_kind,
+                        TestParticipant.display_name == display_name,
+                    )
+                )
+        if spec.table_name == "occupants":
+            return self.session.scalar(
+                select(Occupant).where(
+                    Occupant.test_id == test_id,
+                    Occupant.source_vehicle_no == spec.values.get("source_vehicle_no"),
+                    Occupant.occupant_location_raw == spec.values.get(
+                        "occupant_location_raw"
+                    ),
+                )
+            )
         if spec.table_name == "media_assets":
             return self.session.scalar(
                 select(MediaAsset).where(
@@ -164,6 +231,38 @@ class CanonicalUpsertService:
                 )
             )
         return None
+
+    def _merge_non_null_values(self, existing: object, spec: CanonicalRowSpec) -> None:
+        for key, value in spec.values.items():
+            if value is None or not hasattr(existing, key):
+                continue
+            if getattr(existing, key) is None:
+                setattr(existing, key, value)
+
+    def _attach_source(
+        self, existing: object, source_payload_id: int, spec: CanonicalRowSpec
+    ) -> None:
+        row_any: Any = existing
+        existing_source = self.session.scalar(
+            select(CanonicalRowSource).where(
+                CanonicalRowSource.table_name == spec.table_name,
+                CanonicalRowSource.row_id == row_any.id,
+                CanonicalRowSource.source_payload_id == source_payload_id,
+                CanonicalRowSource.source_row_path == spec.source_row.json_path,
+                CanonicalRowSource.source_row_hash == spec.source_row.row_hash,
+            )
+        )
+        if existing_source is not None:
+            return
+        self.session.add(
+            CanonicalRowSource(
+                table_name=spec.table_name,
+                row_id=row_any.id,
+                source_payload_id=source_payload_id,
+                source_row_path=spec.source_row.json_path,
+                source_row_hash=spec.source_row.row_hash,
+            )
+        )
 
 
 def _lineage_values(source_payload_id: int | None, spec: CanonicalRowSpec) -> dict[str, Any]:
