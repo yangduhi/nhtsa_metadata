@@ -45,7 +45,7 @@ class FixtureNhtsaClient:
             page_number=path_and_query.get("page_number", match.get("page_number", 0)),
             count=path_and_query.get("count"),
         )
-        return fixture_result(endpoint_name, url, payload)
+        return fixture_result(endpoint_name, url, payload, path_values=dict(path_and_query))
 
     def fetch_all_pages(
         self, endpoint_name: str, **path_and_query: object
@@ -92,9 +92,14 @@ class FixtureNhtsaClient:
         raise FixtureNotFoundError(f"no fixture mapping for {endpoint_name}: {path_and_query}")
 
 
-def fixture_result(endpoint_name: str, url: str, payload: dict[str, Any]) -> SourceFetchResult:
+def fixture_result(
+    endpoint_name: str,
+    url: str,
+    payload: dict[str, Any],
+    path_values: dict[str, object] | None = None,
+) -> SourceFetchResult:
     return SourceFetchResult(
-        request=SourceRequest(endpoint_name=endpoint_name, url=url),
+        request=SourceRequest(endpoint_name=endpoint_name, url=url, path_values=path_values or {}),
         payload=payload,
         http_status=200,
     )

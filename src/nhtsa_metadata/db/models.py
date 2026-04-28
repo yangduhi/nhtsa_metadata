@@ -268,6 +268,7 @@ class Barrier(LineageMixin, TimestampMixin, Base):
 
 class TestParticipant(LineageMixin, TimestampMixin, Base):
     __tablename__ = "test_participants"
+    __test__ = False
 
     id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
     test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
