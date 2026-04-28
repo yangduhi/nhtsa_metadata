@@ -1,0 +1,7 @@
+{
+  "name": "nhtsa_metadata",
+  "type": "python",
+  "scope": "metadata-only NHTSA crash test catalog DB",
+  "default_verify": "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+  "live_network_default": false
+}
