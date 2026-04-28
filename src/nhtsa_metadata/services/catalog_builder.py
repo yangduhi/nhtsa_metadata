@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from nhtsa_metadata.config import Settings, get_settings
+from nhtsa_metadata.config import Settings, get_settings, sanitize_database_url
 from nhtsa_metadata.db.models import CollectionRun
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.sources.nhtsa_crash.client import LiveAccessNotAllowedError
@@ -35,8 +36,11 @@ class CatalogBuilder:
         if source == "live" and not allow_live:
             raise LiveAccessNotAllowedError("--source live requires --allow-live")
         self.session = session
+        self.mode = source
+        self.allow_live = allow_live
+        self.settings = settings or get_settings()
         self.client = (
-            LiveNhtsaClient(settings or get_settings(), allow_live=True)
+            LiveNhtsaClient(self.settings, allow_live=allow_live)
             if source == "live"
             else FixtureNhtsaClient()
         )
@@ -54,7 +58,14 @@ class CatalogBuilder:
         return self.collect_tests(test_numbers)
 
     def collect_tests(self, test_numbers: list[int]) -> CollectResult:
-        run = CollectionRun(run_uuid=str(uuid4()), source="nhtsa_crash", mode="fixture")
+        run = CollectionRun(
+            run_uuid=str(uuid4()),
+            source="nhtsa_crash",
+            mode=self.mode,
+            allow_live=self.allow_live,
+            database_url_sanitized=sanitize_database_url(self.settings.database_url),
+            options_json={"test_numbers": test_numbers},
+        )
         self.session.add(run)
         self.session.flush()
         payload_count = 0
@@ -64,6 +75,7 @@ class CatalogBuilder:
             payload_count += len(self.ingestion.ingest_fetch_results(fetch_results, run_id=run.id))
             canonical_rows += self.ingestion.rebuild_test(test_no)
         run.status = "succeeded"
+        run.finished_at = datetime.utcnow()
         self.session.commit()
         return CollectResult(run.id, test_numbers, payload_count, canonical_rows)
 

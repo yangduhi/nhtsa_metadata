@@ -7,7 +7,7 @@ from rich.console import Console
 from sqlalchemy import func, select
 
 from nhtsa_metadata import __version__
-from nhtsa_metadata.config import get_settings
+from nhtsa_metadata.config import Settings, get_settings
 from nhtsa_metadata.db.models import CrashTest
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
@@ -63,9 +63,12 @@ def catalog_discover(
     source: Annotated[str, typer.Option("--source")] = "fixture",
     allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
 ) -> None:
-    session_factory = _session_factory(None)
+    settings = _effective_settings(None)
+    session_factory = _session_factory_for_settings(settings)
     with session_factory() as session:
-        result = CatalogBuilder(session, source=source, allow_live=allow_live).discover(max_pages)
+        result = CatalogBuilder(
+            session, source=source, allow_live=allow_live, settings=settings
+        ).discover(max_pages)
     console.print(json.dumps(result, sort_keys=True))
 
 
@@ -84,11 +87,12 @@ def catalog_collect_test(
     if dry_run:
         console.print(json.dumps({"dry_run": True, "test_no": test_no}, sort_keys=True))
         return
-    session_factory = _session_factory(database_url)
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
     with session_factory() as session:
-        result = CatalogBuilder(session, source=source, allow_live=allow_live).collect_tests(
-            [test_no]
-        )
+        result = CatalogBuilder(
+            session, source=source, allow_live=allow_live, settings=settings
+        ).collect_tests([test_no])
     console.print(json.dumps(result.__dict__, sort_keys=True))
 
 
@@ -103,11 +107,12 @@ def catalog_collect(
     if dry_run:
         console.print(json.dumps({"dry_run": True, "manifest": str(manifest)}, sort_keys=True))
         return
-    session_factory = _session_factory(database_url)
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
     with session_factory() as session:
-        result = CatalogBuilder(session, source=source, allow_live=allow_live).collect_manifest(
-            manifest
-        )
+        result = CatalogBuilder(
+            session, source=source, allow_live=allow_live, settings=settings
+        ).collect_manifest(manifest)
     console.print(json.dumps(result.__dict__, sort_keys=True))
 
 
@@ -160,10 +165,15 @@ def scale_report(
 
 
 def _session_factory(database_url: str | None):
+    return _session_factory_for_settings(_effective_settings(database_url))
+
+
+def _effective_settings(database_url: str | None) -> Settings:
     settings = get_settings()
-    effective_settings = (
-        settings.model_copy(update={"database_url": database_url}) if database_url else settings
-    )
+    return settings.model_copy(update={"database_url": database_url}) if database_url else settings
+
+
+def _session_factory_for_settings(effective_settings: Settings):
     engine = create_engine_for_settings(effective_settings)
     ensure_schema(engine)
     return create_session_factory(effective_settings)
