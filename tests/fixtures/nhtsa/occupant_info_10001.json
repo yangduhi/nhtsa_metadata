@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 2, "total": 2}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10001, "vehicleNo": 1, "occupantLocation": "DRIVER", "occupantType": "50th Male Hybrid III", "dummyType": "HYBRID III", "HIC": 302, "CSI": 412, "TTI": 0},
+    {"testNo": 10001, "vehicleNo": 1, "occupantLocation": "PASSENGER", "occupantType": "5th Female Hybrid III", "dummyType": "HYBRID III", "HIC": 210, "CSI": 320, "TTI": null}
+  ]
+}

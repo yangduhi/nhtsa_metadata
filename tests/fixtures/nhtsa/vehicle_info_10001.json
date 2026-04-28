@@ -1,0 +1,18 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 1, "total": 1}, "status": 200, "message": "Success", "error": ""},
+  "results": [{
+    "testNo": 10001,
+    "vehicleNo": 1,
+    "vehicleMake": "CADILLAC",
+    "vehicleModel": "ESCALADE",
+    "modelYear": 2017,
+    "engineType": "V8",
+    "vehicleTestWeight": "2705",
+    "vehicleLength": "5180",
+    "vehicleSpeed": "56.11",
+    "vehicleWidth": "2044",
+    "vaxCrushDistance": "398",
+    "occupantInformation": "fixture://get-occupant-info/10001",
+    "barrierInformation": "fixture://get-barrier-info/10001"
+  }]
+}

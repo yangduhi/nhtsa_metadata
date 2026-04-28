@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 2, "total": 2}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10003, "url": "https://example.invalid/10003/side.JPG", "title": "Side photo"},
+    {"testNo": 10003, "url": "https://example.invalid/10003/report.pdf", "title": "Test report"}
+  ]
+}

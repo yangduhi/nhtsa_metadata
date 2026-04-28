@@ -1,0 +1,9 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 4, "total": 4}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10001, "url": "https://example.invalid/10001/data.uds.zip", "documentType": "UDS"},
+    {"testNo": 10001, "url": "https://example.invalid/10001/channels.tdms.zip", "documentType": "TDMS"},
+    {"testNo": 10001, "url": "https://example.invalid/10001/sensors.abf.zip", "documentType": "ABF"},
+    {"testNo": 10001, "url": "https://example.invalid/10001/iso.zip", "documentType": "ISO"}
+  ]
+}
