@@ -18,12 +18,15 @@ from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.coverage_service import CoverageService
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
+from nhtsa_metadata.services.scale_readiness import ScaleReadinessService
 
 app = typer.Typer(add_completion=False, no_args_is_help=False)
 catalog_app = typer.Typer(add_completion=False)
 coverage_app = typer.Typer(add_completion=False)
+scale_app = typer.Typer(add_completion=False)
 app.add_typer(catalog_app, name="catalog")
 app.add_typer(coverage_app, name="coverage")
+app.add_typer(scale_app, name="scale")
 console = Console()
 
 
@@ -144,6 +147,16 @@ def coverage_report(
     with session_factory() as session:
         rows = CoverageService(session).report_rows()
     console.print(json.dumps([row.__dict__ for row in rows], sort_keys=True, default=str))
+
+
+@scale_app.command("report")
+def scale_report(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        report = ScaleReadinessService(session).report()
+    console.print(json.dumps(report.__dict__, sort_keys=True, default=str))
 
 
 def _session_factory(database_url: str | None):
