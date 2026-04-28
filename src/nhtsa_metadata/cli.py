@@ -7,7 +7,7 @@ from rich.console import Console
 from sqlalchemy import func, select
 
 from nhtsa_metadata import __version__
-from nhtsa_metadata.config import Settings, get_settings
+from nhtsa_metadata.config import get_settings
 from nhtsa_metadata.db.models import CrashTest
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
@@ -17,6 +17,7 @@ from nhtsa_metadata.db.session import (
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.coverage_service import CoverageService
 from nhtsa_metadata.services.ingestion_service import IngestionService
+from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
 
 app = typer.Typer(add_completion=False, no_args_is_help=False)
 catalog_app = typer.Typer(add_completion=False)
@@ -125,8 +126,14 @@ def catalog_assert_live_baseline(
 ) -> None:
     session_factory = _session_factory(database_url)
     with session_factory() as session:
+        result = assert_live_baseline(session)
         count = session.scalar(select(func.count(CrashTest.id))) or 0
-    console.print(json.dumps({"baseline_checked": True, "test_count": count}, sort_keys=True))
+    console.print(
+        json.dumps(
+            {"baseline_checked": True, "passed": result.passed, "test_count": count},
+            sort_keys=True,
+        )
+    )
 
 
 @coverage_app.command("report")
@@ -142,9 +149,7 @@ def coverage_report(
 def _session_factory(database_url: str | None):
     settings = get_settings()
     effective_settings = (
-        Settings(database_url=database_url, environment=settings.environment)
-        if database_url
-        else settings
+        settings.model_copy(update={"database_url": database_url}) if database_url else settings
     )
     engine = create_engine_for_settings(effective_settings)
     ensure_schema(engine)

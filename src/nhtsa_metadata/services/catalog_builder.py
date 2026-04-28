@@ -7,11 +7,13 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from nhtsa_metadata.config import Settings, get_settings
 from nhtsa_metadata.db.models import CollectionRun
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.sources.nhtsa_crash.client import LiveAccessNotAllowedError
 from nhtsa_metadata.sources.nhtsa_crash.contracts import SourceFetchResult
 from nhtsa_metadata.sources.nhtsa_crash.fixtures import FixtureNhtsaClient
+from nhtsa_metadata.sources.nhtsa_crash.live_client import LiveNhtsaClient
 
 
 @dataclass(frozen=True)
@@ -23,13 +25,21 @@ class CollectResult:
 
 
 class CatalogBuilder:
-    def __init__(self, session: Session, source: str = "fixture", allow_live: bool = False) -> None:
+    def __init__(
+        self,
+        session: Session,
+        source: str = "fixture",
+        allow_live: bool = False,
+        settings: Settings | None = None,
+    ) -> None:
         if source == "live" and not allow_live:
             raise LiveAccessNotAllowedError("--source live requires --allow-live")
-        if source != "fixture":
-            raise LiveAccessNotAllowedError("only fixture source is enabled before Phase 7")
         self.session = session
-        self.client = FixtureNhtsaClient()
+        self.client = (
+            LiveNhtsaClient(settings or get_settings(), allow_live=True)
+            if source == "live"
+            else FixtureNhtsaClient()
+        )
         self.ingestion = IngestionService(session)
 
     def discover(self, max_pages: int = 1) -> dict[str, object]:
