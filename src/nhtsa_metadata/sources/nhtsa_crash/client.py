@@ -12,13 +12,11 @@ class LiveAccessNotAllowedError(RuntimeError):
 
 
 class SourceClientProtocol(Protocol):
-    def fetch(self, endpoint_name: str, **path_and_query: object) -> SourceFetchResult:
-        ...
+    def fetch(self, endpoint_name: str, **path_and_query: object) -> SourceFetchResult: ...
 
     def fetch_all_pages(
         self, endpoint_name: str, **path_and_query: object
-    ) -> list[SourceFetchResult]:
-        ...
+    ) -> list[SourceFetchResult]: ...
 
 
 class LiveNhtsaClient:
