@@ -1,7 +1,27 @@
 {
   "name": "nhtsa_metadata",
   "type": "python",
-  "scope": "metadata-only NHTSA crash test catalog DB",
+  "scope": "2011+ metadata-only NHTSA crash test catalog DB",
   "default_verify": "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
-  "live_network_default": false
+  "harness": "powershell -ExecutionPolicy Bypass -File .harness\\run.ps1",
+  "live_network_default": false,
+  "min_test_date": "2011-01-01",
+  "reference_database_path": "D:\\vscode\\pulse_analysis\\data\\db\\nhtsa_data.db",
+  "reference_database_role": "bounded manifest seed only",
+  "default_live_pilot_manifest": "data\\stratified_live_pilot_2011plus_manifest.csv",
+  "default_live_pilot_database": "sqlite:///data/stratified_live_pilot_2011plus.sqlite",
+  "default_live_pilot_audit": "data\\schema_audit_report_2011plus.json",
+  "forbidden_operations": [
+    "full crawler implementation",
+    "full crawler execution",
+    "unbounded NHTSA test range collection",
+    "file download execution",
+    "waveform parsing",
+    "TDMS parsing",
+    "UDS parsing",
+    "ABF parsing",
+    "ISO zip analysis",
+    "adding live calls to default pytest/verify/harness",
+    "committing data artifacts"
+  ]
 }

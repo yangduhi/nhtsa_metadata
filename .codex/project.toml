@@ -1,0 +1,55 @@
+name = "nhtsa_metadata"
+type = "python"
+description = "2011+ NHTSA crash test metadata-only catalog"
+
+[scope]
+min_test_date = "2011-01-01"
+canonical_read_model = "test_date >= 2011-01-01 only"
+model_year_is_scope = false
+metadata_only = true
+raw_payloads_are_source_of_truth = true
+reference_database_path = "D:\\vscode\\pulse_analysis\\data\\db\\nhtsa_data.db"
+reference_database_role = "bounded manifest seed only; not canonical source of truth"
+
+[verification]
+default_verify = "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1"
+harness = "powershell -ExecutionPolicy Bypass -File .harness\\run.ps1"
+default_live_network = false
+required_before_100_test_pilot = [
+  "pytest",
+  "ruff",
+  "mypy",
+  "scripts_verify",
+  "harness",
+  "live_safety_negative",
+  "40_test_schema_audit_recheck"
+]
+
+[live_policy]
+manual_only = true
+requires_allow_live_flag = true
+requires_env_allow_live = true
+allow_env_name = "NHTSA_METADATA_ALLOW_LIVE"
+
+[bounded_pilot]
+current_manifest = "data\\stratified_live_pilot_2011plus_manifest.csv"
+current_database = "sqlite:///data/stratified_live_pilot_2011plus.sqlite"
+current_audit_report = "data\\schema_audit_report_2011plus.json"
+next_manifest_limit = 100
+next_manifest_only_until_approved = true
+next_manifest_command = ".venv\\Scripts\\python.exe -m nhtsa_metadata.cli catalog build-manifest --source live --allow-live --output data\\stratified_live_pilot_2011plus_100_manifest.csv --limit 100 --max-per-configuration 10 --min-test-date 2011-01-01 --reference-database D:\\vscode\\pulse_analysis\\data\\db\\nhtsa_data.db"
+
+[forbidden]
+operations = [
+  "full crawler implementation",
+  "full crawler execution",
+  "unbounded NHTSA test range collection",
+  "file download execution",
+  "waveform parsing",
+  "TDMS parsing",
+  "UDS parsing",
+  "ABF parsing",
+  "ISO zip analysis",
+  "adding live calls to default pytest/verify/harness",
+  "committing data artifacts"
+]

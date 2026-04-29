@@ -1,8 +1,8 @@
 # Catalog Builder Contract
 
-이 프로젝트의 canonical/read-model 대상은 test_date >= 2011-01-01인 NHTSA crash test metadata로 제한한다.
-modelYear는 scope 판단 기준이 아니다.
-test_date missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
+이 프로젝트의 canonical/read-model 대상은 `test_date >= 2011-01-01`인 NHTSA crash test metadata로 제한한다.
+`modelYear`는 scope 판단 기준이 아니다.
+`test_date` missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
 
 Required CLI commands:
 
@@ -14,7 +14,7 @@ python -m nhtsa_metadata.cli catalog build-manifest --source live --allow-live -
 python -m nhtsa_metadata.cli catalog rebuild --test-no 10001
 python -m nhtsa_metadata.cli catalog rebuild
 python -m nhtsa_metadata.cli coverage report
-python -m nhtsa_metadata.cli schema audit --database-url sqlite:///data/stratified_live_pilot.sqlite --output data/schema_audit_report.json
+python -m nhtsa_metadata.cli schema audit --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite --output data/schema_audit_report_2011plus.json
 python -m nhtsa_metadata.cli schema audit --include-duplicate-details --duplicate-detail-limit 50
 ```
 

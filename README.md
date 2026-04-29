@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`nhtsa_metadata` is a metadata-only catalog database for the NHTSA Vehicle Crash Test Database.
-It preserves raw NHTSA source responses, normalizes important engineering filter domains, and
-exposes query/filter APIs.
+`nhtsa_metadata` is a metadata-only catalog database for 2011+ NHTSA Vehicle Crash Test Database
+metadata. It preserves raw NHTSA source responses, normalizes important engineering filter domains,
+and exposes query/filter APIs.
 
 ## Scope
 
@@ -12,8 +12,9 @@ exposes query/filter APIs.
 - FastAPI application skeleton
 - SQLite/SQLAlchemy/Alembic foundation
 - Fixture/mock based verification
-- Raw/provenance, canonical, and read-model layers in later phases
-- CLI and local verification scripts
+- Raw/provenance, canonical, and read-model layers
+- Canonical/read-model scope fixed to `test_date >= 2011-01-01`
+- Bounded manual live validation through manifest-driven commands only
 
 ## Not in Scope
 
@@ -33,6 +34,9 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
+Copy `.env.example` to `.env` only when local overrides are needed. Keep
+`NHTSA_METADATA_ALLOW_LIVE=false` for default development.
+
 ## Verification
 
 ```powershell
@@ -48,8 +52,11 @@ Default verification must not call live NHTSA services.
 ## Manual Live Validation
 
 Manual live validation remains disabled by default and is not used by tests, verify scripts, or
-harness scripts. Bounded live validation requires both `--allow-live` and
+harness scripts. Bounded live validation requires `--source live`, `--allow-live`, and
 `NHTSA_METADATA_ALLOW_LIVE=true`.
+
+The local reference DB at `D:\vscode\pulse_analysis\data\db\nhtsa_data.db` may be used only as a
+bounded manifest seed. It is not the source of truth for canonical metadata.
 
 ## Project Layout
 
@@ -58,6 +65,10 @@ src/nhtsa_metadata/       Python package
 tests/                    Unit and smoke tests
 scripts/                  Local test and verification scripts
 .harness/                 Codex harness entrypoint
+.codex/                   Repo-local Codex operating rules
+.skills/                  Repo-local reusable agent skills
+.agent/                   Project metadata for agent workflows
+.agents/skills/           Compatibility skill wrappers
 docs/phase_reports/       Per-phase implementation reports
 nhtsa_metadata_codex_work_orders/  Implementation work orders
 ```

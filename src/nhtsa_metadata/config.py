@@ -1,6 +1,7 @@
 from datetime import date
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -21,7 +22,14 @@ class Settings(BaseSettings):
     default_retry_count: int = 2
     rate_limit_delay_seconds: float = 0.0
     min_test_date: date = date(2011, 1, 1)
-    reference_database_path: str | None = None
+    reference_database_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "reference_database_path",
+            "NHTSA_METADATA_REFERENCE_DB_PATH",
+            "NHTSA_METADATA_REFERENCE_DATABASE_PATH",
+        ),
+    )
 
 
 def sanitize_database_url(database_url: str) -> str:

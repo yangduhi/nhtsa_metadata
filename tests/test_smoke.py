@@ -34,3 +34,9 @@ def test_cli_app_imports() -> None:
 
 def test_default_min_test_date_is_2011() -> None:
     assert Settings().min_test_date.isoformat() == "2011-01-01"
+
+
+def test_reference_db_path_env_alias(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    expected = r"D:\vscode\pulse_analysis\data\db\nhtsa_data.db"
+    monkeypatch.setenv("NHTSA_METADATA_REFERENCE_DB_PATH", expected)
+    assert Settings(_env_file=None).reference_database_path == expected
