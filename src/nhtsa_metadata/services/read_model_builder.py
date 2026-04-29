@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from nhtsa_metadata.config import get_settings
 from nhtsa_metadata.db.models import (
     AssetSummary,
     CrashTest,
@@ -15,11 +17,13 @@ from nhtsa_metadata.db.models import (
     TestParticipant,
     Vehicle,
 )
+from nhtsa_metadata.services.scope import is_in_scope_test_record
 
 
 class ReadModelBuilder:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, min_test_date: date | None = None) -> None:
         self.session = session
+        self.min_test_date = min_test_date or get_settings().min_test_date
 
     def rebuild_for_test(self, test_no: int) -> None:
         test = self.session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
@@ -30,6 +34,12 @@ class ReadModelBuilder:
             delete(TestClassification).where(TestClassification.test_id == test.id)
         )
         self.session.execute(delete(AssetSummary).where(AssetSummary.test_id == test.id))
+        if not is_in_scope_test_record(
+            test.test_date, test.test_date_parse_status, self.min_test_date
+        ):
+            self.session.flush()
+            self.rebuild_facets()
+            return
         vehicles = list(self.session.scalars(select(Vehicle).where(Vehicle.test_id == test.id)))
         assets = list(self.session.scalars(select(MediaAsset).where(MediaAsset.test_id == test.id)))
         participants = list(

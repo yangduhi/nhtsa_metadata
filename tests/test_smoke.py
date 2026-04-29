@@ -24,8 +24,13 @@ def test_health_endpoint(tmp_settings: Settings) -> None:
         "app": "nhtsa_metadata",
         "environment": "test",
         "database_url_configured": True,
+        "min_test_date": "2011-01-01",
     }
 
 
 def test_cli_app_imports() -> None:
     assert cli_app is not None
+
+
+def test_default_min_test_date_is_2011() -> None:
+    assert Settings().min_test_date.isoformat() == "2011-01-01"

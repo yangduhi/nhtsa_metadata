@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 1, "count": 20, "total": 634, "currentUrl": "fixture://instrumentation/10001?pageNumber=1", "nextUrl": null, "previousUrl": "fixture://instrumentation/10001?pageNumber=0"}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10001, "curveNo": 21, "sensorType": "ACCELEROMETER", "sensorLocation": "PASSENGER HEAD", "sensorAttachment": "OCCUPANT", "axisDirofSensor": "Y", "unit": "G", "firstPoint": 1, "lastPoint": 1000, "timeIncrement": 0.0001, "channelStatus": "OK", "dataStatus": "AVAILABLE"},
+    {"testNo": 10001, "curveNo": 22, "sensorType": "LOAD CELL", "sensorLocation": "RIGHT FEMUR", "sensorAttachment": "OCCUPANT", "axisDirofSensor": "Z", "unit": "N", "firstPoint": 1, "lastPoint": 1000, "timeIncrement": 0.0001, "channelStatus": "OK", "dataStatus": "AVAILABLE"}
+  ]
+}

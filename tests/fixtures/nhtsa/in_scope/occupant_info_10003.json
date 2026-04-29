@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 2, "total": 2}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10003, "vehicleNo": 2, "occupantLocation": "DRIVER", "occupantType": "50th Male SID-IIs", "dummyType": "SID-IIs", "HIC": 0, "CSI": "0"},
+    {"testNo": 10003, "vehicleNo": 2, "occupantLocation": "REAR PASSENGER", "occupantType": "5th Female SID-IIs", "dummyType": "SID-IIs"}
+  ]
+}

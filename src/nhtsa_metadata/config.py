@@ -1,3 +1,4 @@
+from datetime import date
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
     default_timeout_seconds: float = 30.0
     default_retry_count: int = 2
     rate_limit_delay_seconds: float = 0.0
+    min_test_date: date = date(2011, 1, 1)
+    reference_database_path: str | None = None
 
 
 def sanitize_database_url(database_url: str) -> str:

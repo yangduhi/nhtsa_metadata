@@ -1,8 +1,8 @@
 param(
     [switch]$AllowLive,
-    [string]$DatabaseUrl = "sqlite:///data/stratified_live_pilot.sqlite",
-    [string]$Manifest = "data/stratified_live_pilot_manifest.csv",
-    [string]$AuditOutput = "data/schema_audit_report.json"
+    [string]$DatabaseUrl = "sqlite:///data/stratified_live_pilot_2011plus.sqlite",
+    [string]$Manifest = "data/stratified_live_pilot_2011plus_manifest.csv",
+    [string]$AuditOutput = "data/schema_audit_report_2011plus.json"
 )
 
 $ErrorActionPreference = "Stop"

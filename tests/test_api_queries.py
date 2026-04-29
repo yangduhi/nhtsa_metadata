@@ -1,7 +1,10 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from nhtsa_metadata.api.app import create_app
 from nhtsa_metadata.config import Settings
+from nhtsa_metadata.db.models import CrashTest
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
     create_session_factory,
@@ -52,3 +55,27 @@ def test_coverage_fields_and_collection_runs(tmp_settings: Settings) -> None:
     runs = client.get("/api/collection-runs").json()
     assert coverage["count"] > 0
     assert runs["count"] >= 1
+
+
+def test_get_test_detail_hides_out_of_scope_stale_canonical_row(
+    tmp_settings: Settings,
+) -> None:
+    ensure_schema(create_engine_for_settings(tmp_settings))
+    session_factory = create_session_factory(tmp_settings)
+    with session_factory() as session:
+        session.add(
+            CrashTest(
+                test_no=1,
+                test_date=date(2010, 12, 31),
+                test_date_parse_status="parsed",
+            )
+        )
+        session.commit()
+    client = TestClient(create_app(tmp_settings))
+    body = client.get("/api/tests/1").json()
+    assert body == {
+        "test_no": 1,
+        "found": False,
+        "reason": "out_of_scope",
+        "min_test_date": "2011-01-01",
+    }

@@ -40,6 +40,25 @@ def test_live_client_uses_fake_transport_only() -> None:
     assert result.payload["results"][0]["testNo"] == 10001
 
 
+def test_live_client_passes_test_date_from_query() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["testDateFrom"] == "2011-01-01"
+        return httpx.Response(
+            200,
+            json={
+                "meta": {"pagination": {"pageNumber": 0, "count": 0, "total": 0}},
+                "results": [],
+            },
+        )
+
+    client = LiveNhtsaClient(
+        Settings(allow_live=True),
+        allow_live=True,
+        transport=httpx.MockTransport(handler),
+    )
+    client.fetch("search", testDateFrom="2011-01-01")
+
+
 def test_cli_live_without_allow_live_fails_before_http() -> None:
     result = CliRunner().invoke(
         app,

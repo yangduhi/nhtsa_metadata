@@ -10,8 +10,9 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from nhtsa_metadata.config import Settings, get_settings, sanitize_database_url
-from nhtsa_metadata.db.models import CollectionRun
+from nhtsa_metadata.db.models import CollectionRun, CollectionRunItem
 from nhtsa_metadata.services.ingestion_service import IngestionService
+from nhtsa_metadata.services.scope import evaluate_scope_from_fetch_results
 from nhtsa_metadata.sources.nhtsa_crash.client import LiveAccessNotAllowedError
 from nhtsa_metadata.sources.nhtsa_crash.contracts import SourceFetchResult
 from nhtsa_metadata.sources.nhtsa_crash.fixtures import FixtureNhtsaClient
@@ -45,7 +46,7 @@ class CatalogBuilder:
             if source == "live"
             else FixtureNhtsaClient()
         )
-        self.ingestion = IngestionService(session)
+        self.ingestion = IngestionService(session, min_test_date=self.settings.min_test_date)
 
     def discover(self, max_pages: int = 1) -> dict[str, object]:
         return {"source": "fixture", "max_pages": max_pages, "test_numbers": [10001, 10003]}
@@ -72,16 +73,53 @@ class CatalogBuilder:
         payload_count = 0
         canonical_rows = 0
         for test_no in test_numbers:
-            fetch_results = self._fetch_fixture_matrix(test_no)
-            payload_count += len(self.ingestion.ingest_fetch_results(fetch_results, run_id=run.id))
+            run_item = CollectionRunItem(
+                run_id=run.id,
+                test_no=test_no,
+                status="started",
+                endpoint_statuses_json={
+                    "min_test_date": self.settings.min_test_date.isoformat()
+                },
+            )
+            self.session.add(run_item)
+            self.session.flush()
+            scope_probe = self._fetch_scope_probe(test_no)
+            scope_decision = evaluate_scope_from_fetch_results(
+                scope_probe, self.settings.min_test_date
+            )
+            run_item.endpoint_statuses_json = {"scope": scope_decision.to_json()}
+            if not scope_decision.in_scope:
+                self.ingestion.canonical_service.delete_test_canonical_rows(test_no)
+                self.ingestion.read_model_builder.rebuild_facets()
+                run_item.status = "skipped_out_of_scope"
+                run_item.finished_at = datetime.utcnow()
+                continue
+            fetch_results = self._fetch_fixture_matrix(test_no, preloaded_results=scope_probe)
+            payload_count += len(
+                self.ingestion.ingest_fetch_results(
+                    fetch_results, run_id=run.id, run_item_id=run_item.id
+                )
+            )
             canonical_rows += self.ingestion.rebuild_test(test_no)
+            run_item.status = "succeeded"
+            run_item.finished_at = datetime.utcnow()
         run.status = "succeeded"
         run.finished_at = datetime.utcnow()
         self.session.commit()
         return CollectResult(run.id, test_numbers, payload_count, canonical_rows)
 
-    def _fetch_fixture_matrix(self, test_no: int) -> list[SourceFetchResult]:
+    def _fetch_scope_probe(self, test_no: int) -> list[SourceFetchResult]:
+        return [self.client.fetch("test_summary", test_no=test_no)]
+
+    def _fetch_fixture_matrix(
+        self,
+        test_no: int,
+        preloaded_results: list[SourceFetchResult] | None = None,
+    ) -> list[SourceFetchResult]:
         results: list[SourceFetchResult] = []
+        preloaded_by_endpoint = {
+            result.request.endpoint_name: result for result in preloaded_results or []
+        }
         occupant_result: SourceFetchResult | None = None
         for endpoint_name in (
             "test_summary",
@@ -93,7 +131,9 @@ class CatalogBuilder:
             "multimedia_files",
             "vehicle_documents",
         ):
-            result = self.client.fetch(endpoint_name, test_no=test_no)
+            result = preloaded_by_endpoint.get(endpoint_name)
+            if result is None:
+                result = self.client.fetch(endpoint_name, test_no=test_no)
             results.append(result)
             if endpoint_name == "occupant_info":
                 occupant_result = result

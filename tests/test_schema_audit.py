@@ -1,9 +1,11 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from nhtsa_metadata.cli import app
+from nhtsa_metadata.db.models import CrashTest
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
     create_session_factory,
@@ -38,6 +40,15 @@ def test_schema_audit_reports_no_fixture_canonical_duplicates(tmp_settings) -> N
     )
     assert report["asset_classification_audit"]["classified_data_packages"] >= 4
     assert "baseline_semantic_cardinality" in report
+    assert report["scope"]["min_test_date"] == "2011-01-01"
+    assert report["scope"]["out_of_scope_tests"] == 0
+    assert report["scope"]["missing_test_date"] == 0
+    assert report["scope"]["date_parse_failed"] == 0
+    assert report["scope"]["read_model_out_of_scope_rows"] == 0
+    assert report["restraint_info_scheduling"]["missing_request_count"] == 0
+    assert all(
+        row["status"] != "investigate" for row in report["baseline_semantic_cardinality"]
+    )
 
 
 def test_schema_audit_cli_writes_json(tmp_settings, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
@@ -65,3 +76,33 @@ def test_schema_audit_cli_writes_json(tmp_settings, tmp_path: Path) -> None:  # 
     assert "endpoint_payload_observation_coverage" in payload
     assert "canonical_duplicate_groups" in payload
     assert "duplicate_details" in payload
+
+
+def test_schema_audit_cli_fails_on_scope_violation(tmp_settings, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    ensure_schema(create_engine_for_settings(tmp_settings))
+    session_factory = create_session_factory(tmp_settings)
+    with session_factory() as session:
+        session.add(
+            CrashTest(
+                test_no=1,
+                test_date=date(2010, 12, 31),
+                test_date_parse_status="parsed",
+            )
+        )
+        session.commit()
+    output = tmp_path / "schema_audit_report.json"
+    result = CliRunner().invoke(
+        app,
+        [
+            "schema",
+            "audit",
+            "--database-url",
+            tmp_settings.database_url,
+            "--output",
+            str(output),
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["scope"]["out_of_scope_tests"] == 1
+    assert payload["scope"]["violations"]

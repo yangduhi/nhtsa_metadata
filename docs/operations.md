@@ -21,30 +21,38 @@ The harness delegates to `scripts/verify.ps1` in Phase 0.
 Live API access is disabled by default. Manual live validation commands require explicit live
 opt-in. Default tests and verification scripts must remain fixture/mock only.
 
+이 프로젝트의 canonical/read-model 대상은 test_date >= 2011-01-01인 NHTSA crash test metadata로 제한한다.
+modelYear는 scope 판단 기준이 아니다.
+test_date missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
+
 ## Bounded Pilot Commands
 
 ```powershell
 .venv\Scripts\python.exe -m nhtsa_metadata.cli catalog build-manifest `
   --source live `
   --allow-live `
-  --output data\stratified_live_pilot_manifest.csv `
+  --output data\stratified_live_pilot_2011plus_manifest.csv `
   --limit 40 `
-  --max-per-configuration 5
+  --max-per-configuration 5 `
+  --min-test-date 2011-01-01 `
+  --reference-database D:\vscode\pulse_analysis\data\db\nhtsa_data.db
 
 powershell -ExecutionPolicy Bypass -File scripts\live_pilot_validate.ps1 `
   -AllowLive `
-  -DatabaseUrl sqlite:///data/stratified_live_pilot.sqlite `
-  -Manifest data/stratified_live_pilot_manifest.csv
+  -DatabaseUrl sqlite:///data/stratified_live_pilot_2011plus.sqlite `
+  -Manifest data/stratified_live_pilot_2011plus_manifest.csv
 ```
 
-The pilot remains bounded by manifest and must not be treated as a full crawler.
+The reference database is only a bounded manifest seed. Live metadata collection still happens
+through NHTSA endpoints, and the pilot remains bounded by manifest. It must not be treated as a
+full crawler.
 
 Schema audit can include duplicate details without raw payload text:
 
 ```powershell
 .venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
-  --database-url sqlite:///data/stratified_live_pilot.sqlite `
-  --output data\schema_audit_report.json `
+  --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite `
+  --output data\schema_audit_report_2011plus.json `
   --include-duplicate-details
 ```
 

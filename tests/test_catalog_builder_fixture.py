@@ -3,6 +3,7 @@ from sqlalchemy import select
 from nhtsa_metadata.db.models import (
     Barrier,
     CollectionRun,
+    CollectionRunItem,
     CrashTest,
     MediaAsset,
     SourcePayload,
@@ -79,6 +80,25 @@ def test_collection_run_records_requested_live_provenance_without_http(tmp_setti
         assert run.allow_live is True
         assert run.finished_at is not None
         assert run.database_url_sanitized == settings.database_url
+
+
+def test_out_of_scope_legacy_collect_skips_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    ensure_schema(create_engine_for_settings(tmp_settings))
+    session_factory = create_session_factory(tmp_settings)
+    with session_factory() as session:
+        result = CatalogBuilder(session).collect_tests([1])
+        assert result.canonical_rows == 0
+    with session_factory() as session:
+        assert session.scalar(select(CrashTest).where(CrashTest.test_no == 1)) is None
+        assert (
+            session.scalar(select(TestFilterSummary).where(TestFilterSummary.test_no == 1))
+            is None
+        )
+        run_item = session.scalar(
+            select(CollectionRunItem).where(CollectionRunItem.test_no == 1)
+        )
+        assert run_item is not None
+        assert run_item.status == "skipped_out_of_scope"
 
 
 def _duplicate_vehicle_groups(session) -> list[tuple[object, ...]]:  # type: ignore[no-untyped-def]

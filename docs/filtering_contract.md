@@ -1,5 +1,9 @@
 # Filtering Contract
 
+이 프로젝트의 canonical/read-model 대상은 test_date >= 2011-01-01인 NHTSA crash test metadata로 제한한다.
+modelYear는 scope 판단 기준이 아니다.
+test_date missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
+
 Required facets:
 
 - `test_type`

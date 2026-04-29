@@ -1,0 +1,21 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 1, "total": 1, "currentUrl": "fixture://test_summary/10001", "nextUrl": null, "previousUrl": null}, "status": 200, "message": "Success", "error": ""},
+  "results": [{
+    "testNo": 10001,
+    "multimediaFiles": "fixture://get-multimedia-files/10001",
+    "testReferenceNo": "BT16121211",
+    "testType": "NEW CAR ASSESSMENT TEST",
+    "testDate": "2016-12-12",
+    "contractorStudyTitle": "NCAP - 2017 CADILLAC ESCALADE 4WD LUXURY SUV",
+    "testPerformer": "MGA RESEARCH",
+    "impactAngle": 0,
+    "testConfiguration": "VEHICLE INTO BARRIER",
+    "testConfigurationKey": "VTB",
+    "offsetDistance": 0,
+    "closingSpeed": 56.11,
+    "instrumentationInformation": "fixture://get-instrumentation-info/10001",
+    "vehicleInformation": "fixture://get-vehicle-info/10001",
+    "barrierInformation": "fixture://get-vehicle-info/10001",
+    "documentInformation": "fixture://vehicle-documents/test-no/10001"
+  }]
+}

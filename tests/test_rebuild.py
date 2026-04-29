@@ -5,7 +5,14 @@ from sqlalchemy import func, select
 from typer.testing import CliRunner
 
 from nhtsa_metadata.cli import app
-from nhtsa_metadata.db.models import CanonicalRowSource, Restraint, SourceConflict, Vehicle
+from nhtsa_metadata.db.models import (
+    CanonicalRowSource,
+    CrashTest,
+    Restraint,
+    SourceConflict,
+    TestFilterSummary,
+    Vehicle,
+)
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
     create_session_factory,
@@ -13,7 +20,7 @@ from nhtsa_metadata.db.session import (
 )
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.ingestion_service import IngestionService
-from nhtsa_metadata.sources.nhtsa_crash.fixtures import fixture_result
+from nhtsa_metadata.sources.nhtsa_crash.fixtures import FixtureNhtsaClient, fixture_result
 
 
 def test_rebuild_from_source_payloads_restores_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]
@@ -63,7 +70,9 @@ def test_restraint_semantic_duplicates_merge_to_one_row(tmp_settings) -> None:  
     session_factory = create_session_factory(tmp_settings)
     with session_factory() as session:
         service = IngestionService(session)
-        service.ingest_fetch_results([fetch_result])
+        service.ingest_fetch_results(
+            [FixtureNhtsaClient().fetch("test_summary", test_no=10001), fetch_result]
+        )
         rebuilt = service.rebuild_test(10001)
         session.commit()
 
@@ -81,3 +90,23 @@ def test_restraint_semantic_duplicates_merge_to_one_row(tmp_settings) -> None:  
         )
         assert len(sources) == 2
         assert session.scalar(select(func.count(SourceConflict.id))) >= 1
+
+
+def test_rebuild_excludes_out_of_scope_legacy_source_payload(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    ensure_schema(create_engine_for_settings(tmp_settings))
+    session_factory = create_session_factory(tmp_settings)
+    with session_factory() as session:
+        service = IngestionService(session)
+        service.ingest_fetch_results(
+            [FixtureNhtsaClient().fetch("metadata_export", test_no=10)]
+        )
+        rebuilt = service.rebuild_test(10)
+        session.commit()
+
+    with session_factory() as session:
+        assert rebuilt == 0
+        assert session.scalar(select(CrashTest).where(CrashTest.test_no == 10)) is None
+        assert (
+            session.scalar(select(TestFilterSummary).where(TestFilterSummary.test_no == 10))
+            is None
+        )

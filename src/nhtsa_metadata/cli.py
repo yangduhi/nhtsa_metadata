@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -62,6 +63,7 @@ def health() -> None:
         "environment": settings.environment,
         "database_url_configured": bool(settings.database_url),
         "allow_live": settings.allow_live,
+        "min_test_date": settings.min_test_date.isoformat(),
     }
     console.print(json.dumps(payload, sort_keys=True))
 
@@ -134,6 +136,8 @@ def catalog_build_manifest(
     max_per_configuration: Annotated[int, typer.Option("--max-per-configuration")] = 5,
     max_discovery_pages: Annotated[int, typer.Option("--max-discovery-pages")] = 5,
     discovery_page_size: Annotated[int, typer.Option("--discovery-page-size")] = 100,
+    min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+    reference_database: Annotated[Path | None, typer.Option("--reference-database")] = None,
 ) -> None:
     if source != "live":
         raise typer.BadParameter("build-manifest currently supports --source live only")
@@ -147,6 +151,9 @@ def catalog_build_manifest(
         max_per_configuration=max_per_configuration,
         max_discovery_pages=max_discovery_pages,
         discovery_page_size=discovery_page_size,
+        min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        reference_database=reference_database
+        or (Path(settings.reference_database_path) if settings.reference_database_path else None),
     )
     console.print(json.dumps(report.__dict__, sort_keys=True))
 
@@ -229,6 +236,8 @@ def schema_audit(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(encoded + "\n", encoding="utf-8")
     console.print(encoded)
+    if _schema_audit_has_scope_hard_failures(payload):
+        raise typer.Exit(1)
 
 
 def _session_factory(database_url: str | None):
@@ -257,6 +266,22 @@ def _source_payload_test_numbers(session: Session) -> list[int]:
         if test_no is not None:
             test_numbers.append(test_no)
     return test_numbers
+
+
+def _parse_date_option(value: str | None) -> date | None:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise typer.BadParameter("date must use YYYY-MM-DD") from exc
+
+
+def _schema_audit_has_scope_hard_failures(payload: dict[str, object]) -> bool:
+    scope = payload.get("scope")
+    if not isinstance(scope, dict):
+        return False
+    return bool(scope.get("violations") or scope.get("read_model_violations"))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 63, "total": 63, "currentUrl": "fixture://instrumentation/10003?pageNumber=0", "nextUrl": null, "previousUrl": null}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10003, "curveNo": 1, "sensorType": "ACCELEROMETER", "sensorLocation": "IMPACTOR", "sensorAttachment": "VEHICLE", "axisDirofSensor": "X", "unit": "G"},
+    {"testNo": 10003, "curveNo": 2, "sensorType": "ACCELEROMETER", "sensorLocation": "VOLT DOOR", "sensorAttachment": "VEHICLE", "axisDirofSensor": "Y", "unit": "G"}
+  ]
+}

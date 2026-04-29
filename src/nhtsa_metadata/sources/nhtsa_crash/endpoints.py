@@ -44,6 +44,18 @@ class EndpointDefinition:
         if self.is_paginated:
             query["pageNumber"] = values.get("page_number", 0)
             query["count"] = values.get("count", self.default_count or 20)
+        reserved = {
+            "test_no",
+            "vehicle_no",
+            "occupant_location",
+            "curve_no",
+            "page_number",
+            "count",
+        }
+        for key, value in values.items():
+            if key in reserved or value is None:
+                continue
+            query[key] = value
         query_string = urlencode(query)
         return f"{base_url.rstrip('/')}{path}" + (f"?{query_string}" if query_string else "")
 

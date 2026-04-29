@@ -73,9 +73,7 @@ class CanonicalUpsertService:
     ) -> int:
         test = self.session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
         if test is not None:
-            self._delete_canonical_row_sources(test.id)
-            self.session.execute(delete(SourceConflict).where(SourceConflict.test_no == test_no))
-            self._delete_child_rows(test.id)
+            self._delete_test_derivatives(test, delete_test=False)
         inserted = 0
         test = self._upsert_test(test_no, specs_by_payload)
         for source_payload_id, specs in specs_by_payload:
@@ -87,6 +85,20 @@ class CanonicalUpsertService:
                     inserted += 1
         self.session.flush()
         return inserted
+
+    def delete_test_canonical_rows(self, test_no: int) -> None:
+        test = self.session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
+        if test is None:
+            return
+        self._delete_test_derivatives(test, delete_test=True)
+
+    def _delete_test_derivatives(self, test: CrashTest, delete_test: bool) -> None:
+        self._delete_canonical_row_sources(test.id)
+        self.session.execute(delete(SourceConflict).where(SourceConflict.test_no == test.test_no))
+        self._delete_child_rows(test.id)
+        if delete_test:
+            self.session.delete(test)
+        self.session.flush()
 
     def _delete_child_rows(self, test_id: int) -> None:
         for model in CHILD_MODELS:

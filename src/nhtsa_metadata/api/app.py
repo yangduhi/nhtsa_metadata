@@ -19,6 +19,7 @@ from nhtsa_metadata.db.session import (
     ensure_schema,
 )
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.scope import is_in_scope_test_record
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "app": effective_settings.app_name,
             "environment": effective_settings.environment,
             "database_url_configured": bool(effective_settings.database_url),
+            "min_test_date": effective_settings.min_test_date.isoformat(),
         }
 
     @app.get("/api/tests")
@@ -46,7 +48,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> dict[str, object]:
         with session_factory() as session:
             summaries = list(
-                session.scalars(select(TestFilterSummary).order_by(TestFilterSummary.test_no))
+                session.scalars(
+                    select(TestFilterSummary)
+                    .where(TestFilterSummary.test_date >= effective_settings.min_test_date)
+                    .order_by(TestFilterSummary.test_no)
+                )
             )
         items = [_summary_out(summary) for summary in summaries]
         if test_type:
@@ -63,6 +69,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             test = session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
             if test is None:
                 return {"test_no": test_no, "found": False}
+            if not is_in_scope_test_record(
+                test.test_date,
+                test.test_date_parse_status,
+                effective_settings.min_test_date,
+            ):
+                return {
+                    "test_no": test_no,
+                    "found": False,
+                    "reason": "out_of_scope",
+                    "min_test_date": effective_settings.min_test_date.isoformat(),
+                }
             vehicles = list(session.scalars(select(Vehicle).where(Vehicle.test_id == test.id)))
             participants = list(
                 session.scalars(select(TestParticipant).where(TestParticipant.test_id == test.id))
