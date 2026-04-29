@@ -1,4 +1,4 @@
-# Source Contract
+﻿# Source Contract
 
 The source of truth is the raw NHTSA response captured endpoint-by-endpoint. OpenAPI schemas are
 useful for endpoint discovery, but field-level shape is treated as observed data because
@@ -14,3 +14,4 @@ Rules:
 - Raw payloads, pagination metadata, source sections, and field coverage must be retained.
 - Empty endpoint responses can be valid when the endpoint contract allows them.
 - Canonical rows must carry lineage back to source payload and JSON row path.
+- Endpoint request context is provenance. For endpoints such as `restraint_info`, row-level canonical mapping must preserve request `vehicle_no` and `occupant_location` when the payload row omits them.

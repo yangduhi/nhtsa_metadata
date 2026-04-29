@@ -39,6 +39,59 @@ def parse_number(value: Any) -> ParsedNumber:
         return ParsedNumber(value, None, "invalid")
 
 
+def canonical_number_text(value: Any) -> str | None:
+    parsed = parse_number(value)
+    if parsed.numeric_value is None:
+        return None if value is None else str(value).strip()
+    if parsed.numeric_value.is_integer():
+        return str(int(parsed.numeric_value))
+    return str(parsed.numeric_value)
+
+
+def normalize_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = " ".join(str(value).strip().upper().split())
+    return text or None
+
+
+def normalize_occupant_location(value: Any) -> str | None:
+    text = normalize_text(value)
+    if text is None:
+        return None
+    aliases = {
+        "01": "LEFT_FRONT",
+        "1": "LEFT_FRONT",
+        "DRIVER": "LEFT_FRONT",
+        "LEFT FRONT": "LEFT_FRONT",
+        "LEFT FRONT SEAT": "LEFT_FRONT",
+        "FRONT LEFT": "LEFT_FRONT",
+        "FRONT LEFT SEAT": "LEFT_FRONT",
+        "02": "RIGHT_FRONT",
+        "2": "RIGHT_FRONT",
+        "PASSENGER": "RIGHT_FRONT",
+        "RIGHT FRONT": "RIGHT_FRONT",
+        "RIGHT FRONT SEAT": "RIGHT_FRONT",
+        "FRONT RIGHT": "RIGHT_FRONT",
+        "FRONT RIGHT SEAT": "RIGHT_FRONT",
+        "03": "RIGHT_REAR",
+        "3": "RIGHT_REAR",
+        "RIGHT REAR": "RIGHT_REAR",
+        "RIGHT REAR SEAT": "RIGHT_REAR",
+        "REAR RIGHT": "RIGHT_REAR",
+        "REAR RIGHT SEAT": "RIGHT_REAR",
+        "04": "LEFT_REAR",
+        "4": "LEFT_REAR",
+        "LEFT REAR": "LEFT_REAR",
+        "LEFT REAR SEAT": "LEFT_REAR",
+        "REAR LEFT": "LEFT_REAR",
+        "REAR LEFT SEAT": "LEFT_REAR",
+        "REAR PASSENGER": "LEFT_REAR",
+        "UNKNOWN": None,
+    }
+    return aliases.get(text, text.replace(" ", "_"))
+
+
 def parse_date(value: Any) -> ParsedDate:
     if value is None:
         return ParsedDate(value, None, "null")

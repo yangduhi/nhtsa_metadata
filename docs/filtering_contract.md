@@ -1,8 +1,8 @@
-# Filtering Contract
+﻿# Filtering Contract
 
-이 프로젝트의 canonical/read-model 대상은 test_date >= 2011-01-01인 NHTSA crash test metadata로 제한한다.
-modelYear는 scope 판단 기준이 아니다.
-test_date missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
+이 프로젝트의 canonical/read-model 대상은 `test_date >= 2011-01-01`인 NHTSA crash test metadata로 제한한다.
+`modelYear`는 scope 판단 기준이 아니다.
+`test_date` missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
 
 Required facets:
 
@@ -33,3 +33,6 @@ Required facets:
 
 V1 compound filter semantics: a test matches when all requested conditions exist somewhere inside
 the same test. Same occupant or same vehicle scoped filtering can be refined in a later version.
+
+For occupant-scoped facets, read models should use normalized occupant slots rather than raw source
+occupant observations.

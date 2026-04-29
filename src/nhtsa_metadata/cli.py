@@ -279,9 +279,14 @@ def _parse_date_option(value: str | None) -> date | None:
 
 def _schema_audit_has_scope_hard_failures(payload: dict[str, object]) -> bool:
     scope = payload.get("scope")
-    if not isinstance(scope, dict):
-        return False
-    return bool(scope.get("violations") or scope.get("read_model_violations"))
+    scope_failed = False
+    if isinstance(scope, dict):
+        scope_failed = bool(scope.get("violations") or scope.get("read_model_violations"))
+    semantic = payload.get("semantic_cardinality")
+    semantic_failed = False
+    if isinstance(semantic, dict):
+        semantic_failed = bool(semantic.get("hard_failures"))
+    return scope_failed or semantic_failed
 
 
 if __name__ == "__main__":

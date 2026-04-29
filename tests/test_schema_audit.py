@@ -46,6 +46,22 @@ def test_schema_audit_reports_no_fixture_canonical_duplicates(tmp_settings) -> N
     assert report["scope"]["date_parse_failed"] == 0
     assert report["scope"]["read_model_out_of_scope_rows"] == 0
     assert report["restraint_info_scheduling"]["missing_request_count"] == 0
+    assert report["semantic_cardinality"]["hard_failures"] == []
+    occupant_slots = {
+        row["test_no"]: row for row in report["semantic_cardinality"]["occupant_slots"]
+    }
+    restraint_assignments = {
+        row["test_no"]: row
+        for row in report["semantic_cardinality"]["restraint_assignments"]
+    }
+    assert occupant_slots[10001]["normalized_occupant_slots"] == 2
+    assert occupant_slots[10003]["normalized_occupant_slots"] == 2
+    assert restraint_assignments[10001]["occupant_specific_restraint_assignments"] >= 6
+    assert restraint_assignments[10001]["occupant_specific_restraint_context_loss"] == 0
+    barrier_rows = {
+        row["test_no"]: row for row in report["barrier_semantic_cardinality"]
+    }
+    assert barrier_rows[10001]["status"] in {"pass", "fixed", "accepted_known_condition"}
     assert all(
         row["status"] != "investigate" for row in report["baseline_semantic_cardinality"]
     )
@@ -75,6 +91,8 @@ def test_schema_audit_cli_writes_json(tmp_settings, tmp_path: Path) -> None:  # 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "endpoint_payload_observation_coverage" in payload
     assert "canonical_duplicate_groups" in payload
+    assert "semantic_cardinality" in payload
+    assert "barrier_semantic_cardinality" in payload
     assert "duplicate_details" in payload
 
 

@@ -6,6 +6,8 @@ from nhtsa_metadata.db.models import (
     CollectionRunItem,
     CrashTest,
     MediaAsset,
+    Occupant,
+    Restraint,
     SourcePayload,
     TestClassification,
     TestFilterSummary,
@@ -46,6 +48,24 @@ def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> Non
         assert _duplicate_vehicle_groups(session) == []
         assert _duplicate_participant_groups(session) == []
         assert _duplicate_barrier_groups(session) == []
+        occupants_10001 = list(
+            session.scalars(
+                select(Occupant)
+                .join(CrashTest, CrashTest.id == Occupant.test_id)
+                .where(CrashTest.test_no == 10001)
+            )
+        )
+        restraints_10001 = list(
+            session.scalars(
+                select(Restraint)
+                .join(CrashTest, CrashTest.id == Restraint.test_id)
+                .where(CrashTest.test_no == 10001)
+            )
+        )
+        assert len(occupants_10001) == 2
+        assert len(restraints_10001) >= 6
+        assert all(restraint.restraint_subject_kind == "occupant" for restraint in restraints_10001)
+        assert all(restraint.occupant_id is not None for restraint in restraints_10001)
         summaries = {
             row.test_no: row
             for row in session.scalars(

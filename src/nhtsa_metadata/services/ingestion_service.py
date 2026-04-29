@@ -50,7 +50,11 @@ class IngestionService:
                 request=SourceRequest(
                     endpoint_name=payload.endpoint_name,
                     url=payload.request_url,
-                    path_values={"test_no": test_no, "vehicle_no": payload.vehicle_no},
+                    path_values={
+                        "test_no": test_no,
+                        "vehicle_no": payload.vehicle_no,
+                        "occupant_location": payload.occupant_location_raw,
+                    },
                 ),
                 payload=payload.payload_json,
                 http_status=payload.http_status,

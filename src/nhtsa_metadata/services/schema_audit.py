@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,8 +30,11 @@ from nhtsa_metadata.services.scope import is_in_scope_test_record
 from nhtsa_metadata.services.semantic_keys import restraint_semantic_key, stable_semantic_hash
 from nhtsa_metadata.sources.nhtsa_crash.field_catalog import normalize_field_path
 from nhtsa_metadata.sources.nhtsa_crash.normalization import (
+    canonical_number_text,
     infer_asset_kind,
     infer_asset_subtype,
+    normalize_occupant_location,
+    normalize_text,
 )
 
 DuplicateGroups = dict[str, list[list[Any]]]
@@ -50,6 +53,8 @@ class SchemaAuditReport:
     unmapped_fields: list[dict[str, object]]
     endpoint_payload_observation_coverage: list[dict[str, object]]
     baseline_semantic_cardinality: list[dict[str, object]]
+    semantic_cardinality: dict[str, object]
+    barrier_semantic_cardinality: list[dict[str, object]]
     asset_classification_audit: dict[str, object]
     scope: dict[str, object]
     restraint_info_scheduling: dict[str, object]
@@ -106,6 +111,14 @@ class SchemaAuditService:
                 source_lookup,
                 self.duplicate_detail_limit,
             )
+        semantic_cardinality = _semantic_cardinality(
+            tests=tests,
+            barriers=barriers,
+            occupants=occupants,
+            restraints=restraints,
+            channels=channels,
+            source_lookup=source_lookup,
+        )
 
         return SchemaAuditReport(
             test_type_distribution=_counter_rows(test.test_type for test in tests),
@@ -122,7 +135,11 @@ class SchemaAuditService:
             unmapped_fields=_unmapped_fields(fields),
             endpoint_payload_observation_coverage=_endpoint_coverage(payloads, observations),
             baseline_semantic_cardinality=_baseline_semantic_cardinality(
-                tests, vehicles, occupants, channels
+                tests, vehicles, occupants, channels, semantic_cardinality
+            ),
+            semantic_cardinality=semantic_cardinality,
+            barrier_semantic_cardinality=cast(
+                list[dict[str, object]], semantic_cardinality["barriers"]
             ),
             asset_classification_audit=_asset_classification_audit(
                 payloads, assets, test_no_by_id
@@ -145,6 +162,8 @@ def report_to_dict(report: SchemaAuditReport) -> dict[str, object]:
         "unmapped_fields": report.unmapped_fields,
         "endpoint_payload_observation_coverage": report.endpoint_payload_observation_coverage,
         "baseline_semantic_cardinality": report.baseline_semantic_cardinality,
+        "semantic_cardinality": report.semantic_cardinality,
+        "barrier_semantic_cardinality": report.barrier_semantic_cardinality,
         "asset_classification_audit": report.asset_classification_audit,
         "scope": report.scope,
         "restraint_info_scheduling": report.restraint_info_scheduling,
@@ -407,6 +426,8 @@ def _duplicate_identity(
     if table_name == "restraints":
         return {
             "test_no": test_no,
+            "restraint_subject_kind": row.restraint_subject_kind,
+            "restraint_subject_semantic_key": row.restraint_subject_semantic_key,
             "semantic_key": _restraint_semantic_key(row),
             "semantic_hash": _restraint_semantic_hash(row),
         }
@@ -439,18 +460,254 @@ def _restraint_semantic_hash(row: Restraint) -> str:
     return row.semantic_hash or stable_semantic_hash(_restraint_semantic_key(row))
 
 
+def _semantic_cardinality(
+    *,
+    tests: list[CrashTest],
+    barriers: list[Barrier],
+    occupants: list[Occupant],
+    restraints: list[Restraint],
+    channels: list[InstrumentationChannel],
+    source_lookup: RowSourceLookup,
+) -> dict[str, object]:
+    test_no_by_id = {test.id: test.test_no for test in tests}
+    occupant_slots = _occupant_slot_cardinality(occupants, test_no_by_id)
+    restraint_assignments = _restraint_assignment_cardinality(restraints, test_no_by_id)
+    barrier_rows = _barrier_semantic_cardinality(barriers, test_no_by_id, source_lookup)
+    hard_failures: list[dict[str, object]] = []
+
+    slots_by_test = {
+        row["test_no"]: _as_int(row.get("normalized_occupant_slots"))
+        for row in occupant_slots
+        if isinstance(row.get("test_no"), int)
+    }
+    assignments_by_test = {
+        row["test_no"]: _as_int(row.get("occupant_specific_restraint_assignments"))
+        for row in restraint_assignments
+        if isinstance(row.get("test_no"), int)
+    }
+    context_loss = sum(
+        _as_int(row.get("occupant_specific_restraint_context_loss"))
+        for row in restraint_assignments
+        if isinstance(row.get("occupant_specific_restraint_context_loss"), int)
+    )
+    test_numbers = {test.test_no for test in tests}
+    if 10001 in test_numbers and slots_by_test.get(10001) != 2:
+        hard_failures.append(
+            {
+                "test_no": 10001,
+                "entity": "occupant_slots",
+                "reason": "10001 normalized occupant slots must be 2",
+                "actual": slots_by_test.get(10001),
+            }
+        )
+    if 10001 in test_numbers and assignments_by_test.get(10001, 0) < 6:
+        hard_failures.append(
+            {
+                "test_no": 10001,
+                "entity": "restraint_assignments",
+                "reason": "10001 occupant-specific restraint assignments must be >= 6",
+                "actual": assignments_by_test.get(10001, 0),
+            }
+        )
+    if 10003 in test_numbers and slots_by_test.get(10003) != 2:
+        hard_failures.append(
+            {
+                "test_no": 10003,
+                "entity": "occupant_slots",
+                "reason": "10003 normalized occupant slots must be 2",
+                "actual": slots_by_test.get(10003),
+            }
+        )
+    if context_loss:
+        hard_failures.append(
+            {
+                "entity": "restraint_assignments",
+                "reason": "occupant-specific restraint stored without occupant context",
+                "actual": context_loss,
+            }
+        )
+    for row in barrier_rows:
+        if row.get("test_no") == 10001 and row.get("status") == "investigate":
+            hard_failures.append(
+                {
+                    "test_no": 10001,
+                    "entity": "barriers",
+                    "reason": "10001 has more than one barrier without accepted condition",
+                    "actual": row.get("canonical_barrier_count"),
+                }
+            )
+
+    return {
+        "occupant_slots": occupant_slots,
+        "restraint_assignments": restraint_assignments,
+        "barriers": barrier_rows,
+        "hard_failures": hard_failures,
+        "instrumentation_channels": _counter_rows(
+            test_no_by_id.get(channel.test_id) for channel in channels
+        ),
+    }
+
+
+def _occupant_slot_cardinality(
+    occupants: list[Occupant], test_no_by_id: dict[int, int]
+) -> list[dict[str, object]]:
+    grouped: dict[int, list[Occupant]] = defaultdict(list)
+    for occupant in occupants:
+        test_no = test_no_by_id.get(occupant.test_id)
+        if test_no is not None:
+            grouped[test_no].append(occupant)
+    rows: list[dict[str, object]] = []
+    for test_no, test_occupants in sorted(grouped.items()):
+        slots = {
+            (
+                occupant.source_vehicle_no,
+                _occupant_slot_key(occupant),
+            )
+            for occupant in test_occupants
+        }
+        rows.append(
+            {
+                "test_no": test_no,
+                "canonical_occupant_rows": len(test_occupants),
+                "normalized_occupant_slots": len(slots),
+                "status": "pass"
+                if test_no not in {10001, 10003} or len(slots) == 2
+                else "investigate",
+            }
+        )
+    return rows
+
+
+def _occupant_slot_key(row: Occupant) -> str:
+    return (
+        row.occupant_location_normalized
+        or normalize_occupant_location(row.occupant_location_raw)
+        or row.occupant_location_raw
+    )
+
+
+def _restraint_assignment_cardinality(
+    restraints: list[Restraint], test_no_by_id: dict[int, int]
+) -> list[dict[str, object]]:
+    grouped: dict[int, list[Restraint]] = defaultdict(list)
+    for restraint in restraints:
+        test_no = test_no_by_id.get(restraint.test_id)
+        if test_no is not None:
+            grouped[test_no].append(restraint)
+    rows: list[dict[str, object]] = []
+    for test_no, test_restraints in sorted(grouped.items()):
+        occupant_assignments = [
+            restraint
+            for restraint in test_restraints
+            if restraint.restraint_subject_kind == "occupant"
+        ]
+        context_loss = [
+            restraint
+            for restraint in test_restraints
+            if _is_occupant_specific_restraint(restraint)
+            and not _has_restraint_occupant_context(restraint)
+        ]
+        rows.append(
+            {
+                "test_no": test_no,
+                "canonical_restraint_rows": len(test_restraints),
+                "occupant_specific_restraint_assignments": len(occupant_assignments),
+                "occupant_specific_restraint_context_loss": len(context_loss),
+                "status": "pass" if not context_loss else "investigate",
+            }
+        )
+    return rows
+
+
+def _is_occupant_specific_restraint(row: Restraint) -> bool:
+    if row.source_endpoint_name == "restraint_info":
+        return True
+    if row.restraint_subject_kind == "occupant":
+        return True
+    raw = row.raw_row_json if isinstance(row.raw_row_json, dict) else {}
+    return any(key in raw for key in ("occupantLocation", "OCCLOC", "OCCLOCD"))
+
+
+def _has_restraint_occupant_context(row: Restraint) -> bool:
+    return (
+        row.restraint_subject_kind == "occupant"
+        and bool(row.restraint_subject_semantic_key)
+        and bool(row.restraint_subject_semantic_hash)
+        and bool(row.occupant_location_normalized or row.occupant_location_raw)
+    )
+
+
+def _barrier_semantic_cardinality(
+    barriers: list[Barrier],
+    test_no_by_id: dict[int, int],
+    source_lookup: RowSourceLookup,
+) -> list[dict[str, object]]:
+    grouped: dict[int, list[Barrier]] = defaultdict(list)
+    for barrier in barriers:
+        test_no = barrier.test_no or test_no_by_id.get(barrier.test_id)
+        if test_no is not None:
+            grouped[test_no].append(barrier)
+    rows: list[dict[str, object]] = []
+    for test_no, test_barriers in sorted(grouped.items()):
+        normalized_keys = {_barrier_key(barrier) for barrier in test_barriers}
+        endpoints: set[str] = set()
+        for barrier in test_barriers:
+            if barrier.source_endpoint_name:
+                endpoints.add(barrier.source_endpoint_name)
+            for source in source_lookup.get(("barriers", barrier.id), []):
+                endpoint = source.get("endpoint_name")
+                if isinstance(endpoint, str) and endpoint:
+                    endpoints.add(endpoint)
+        status = "pass"
+        reason = None
+        if len(test_barriers) == 1 and len(endpoints) > 1:
+            status = "fixed"
+            reason = "multiple source endpoints attached to one canonical barrier"
+        elif len(test_barriers) != len(normalized_keys):
+            status = "investigate"
+            reason = "canonical barrier rows exceed normalized barrier identity count"
+        elif test_no == 10001 and len(test_barriers) > 1:
+            status = "investigate"
+            reason = "10001 barrier cardinality is not closed"
+        rows.append(
+            {
+                "test_no": test_no,
+                "canonical_barrier_count": len(test_barriers),
+                "normalized_barrier_count": len(normalized_keys),
+                "source_endpoint_count": len(endpoints),
+                "status": status,
+                "reason": reason,
+            }
+        )
+    return rows
+
+
+def _barrier_key(row: Barrier) -> tuple[object, ...]:
+    return (
+        normalize_text(row.rigidity),
+        normalize_text(row.shape),
+        canonical_number_text(row.angle_raw),
+    )
+
+
 def _baseline_semantic_cardinality(
     tests: list[CrashTest],
     vehicles: list[Vehicle],
     occupants: list[Occupant],
     channels: list[InstrumentationChannel],
+    semantic_cardinality: dict[str, object],
 ) -> list[dict[str, object]]:
     test_id_by_no = {test.test_no: test.id for test in tests}
+    slot_rows = {
+        row["test_no"]: row
+        for row in _as_dict_rows(semantic_cardinality.get("occupant_slots"))
+    }
     rows: list[dict[str, object]] = []
     if 10001 in test_id_by_no:
         test_id = test_id_by_no[10001]
         actual = sum(1 for occupant in occupants if occupant.test_id == test_id)
-        status = "pass" if actual == 2 else "accepted_known_condition"
+        normalized_slots = _as_int(slot_rows.get(10001, {}).get("normalized_occupant_slots"))
+        status = "pass" if normalized_slots == 2 else "investigate"
         rows.append(
             {
                 "test_no": 10001,
@@ -458,10 +715,11 @@ def _baseline_semantic_cardinality(
                 "expected_min": 2,
                 "expected_exact_when_normalized": 2,
                 "actual": actual,
+                "normalized_occupant_slots": normalized_slots,
                 "status": status,
                 "reason": None
                 if status == "pass"
-                else "canonical preserves distinct source occupant rows after dedupe",
+                else "canonical occupant slots must normalize to exactly two rows",
             }
         )
     if 10003 in test_id_by_no:
@@ -642,9 +900,7 @@ def _expected_restraint_requests(
 
 
 def _normalize_location(value: object) -> str | None:
-    if value is None:
-        return None
-    return str(value).strip().upper()
+    return normalize_occupant_location(value)
 
 
 def _data_package_candidates(payloads: list[SourcePayload]) -> list[dict[str, object]]:
@@ -771,3 +1027,9 @@ def _endpoint_coverage(
 
 def _as_int(value: object) -> int:
     return value if isinstance(value, int) else 0
+
+
+def _as_dict_rows(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, dict)]

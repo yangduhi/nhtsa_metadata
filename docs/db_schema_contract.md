@@ -1,4 +1,4 @@
-# DB Schema Contract
+﻿# DB Schema Contract
 
 Phase 2 implements the concrete SQLAlchemy/Alembic schema. The schema must include:
 
@@ -17,8 +17,10 @@ Raw payloads are immutable. Read models are rebuildable derivatives.
 
 Canonical duplicate hardening rules:
 
-- `restraints` must dedupe by semantic identity and keep repeated source observations in
-  `canonical_row_sources`.
-- `schema audit` must report duplicate summaries for vehicles, test participants, barriers,
-  occupants, restraints, instrumentation channels, and media assets.
+- `occupants` represent normalized occupant slots, not raw source observations. Source-specific occupant rows attach through `canonical_row_sources`.
+- `restraints` represent occupant-context restraint assignments. Each occupant-specific restraint row must keep `occupant_id` or `restraint_subject_kind`, `restraint_subject_semantic_key`, and `restraint_subject_semantic_hash`.
+- `restraints` use semantic identity over test, restraint subject, and restraint system fields. Repeated source observations attach through `canonical_row_sources`.
+- `barriers` dedupe normalized barrier identity across `metadata_export` and detail endpoints when they describe the same barrier.
+- `schema audit` must report duplicate summaries for vehicles, test participants, barriers, occupants, restraints, instrumentation channels, and media assets.
+- `schema audit` must also report semantic cardinality for occupant slots, restraint assignments, and barriers.
 - `media_assets` must preserve data-package subtype evidence without downloading files.

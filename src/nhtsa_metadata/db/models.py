@@ -319,7 +319,14 @@ class Occupant(LineageMixin, TimestampMixin, Base):
 
 class Restraint(LineageMixin, TimestampMixin, Base):
     __tablename__ = "restraints"
-    __table_args__ = (UniqueConstraint("test_id", "semantic_hash"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "test_id",
+            "restraint_subject_kind",
+            "restraint_subject_semantic_hash",
+            "semantic_hash",
+        ),
+    )
 
     id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
     test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
@@ -327,6 +334,18 @@ class Restraint(LineageMixin, TimestampMixin, Base):
     occupant_id: Mapped[int | None] = sa_mapped_column(ForeignKey("occupants.id"), nullable=True)
     source_vehicle_no: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
     occupant_location_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    occupant_location_normalized: Mapped[str | None] = sa_mapped_column(
+        String(120), nullable=True
+    )
+    restraint_subject_kind: Mapped[str] = sa_mapped_column(
+        String(64), default="unknown", nullable=False
+    )
+    restraint_subject_semantic_key: Mapped[str] = sa_mapped_column(
+        Text, default="", nullable=False
+    )
+    restraint_subject_semantic_hash: Mapped[str] = sa_mapped_column(
+        String(64), default="", nullable=False
+    )
     restraint_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
     deployment_status: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
     semantic_key: Mapped[str] = sa_mapped_column(Text, default="", nullable=False)

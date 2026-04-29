@@ -1,4 +1,4 @@
-# Catalog Builder Contract
+﻿# Catalog Builder Contract
 
 이 프로젝트의 canonical/read-model 대상은 `test_date >= 2011-01-01`인 NHTSA crash test metadata로 제한한다.
 `modelYear`는 scope 판단 기준이 아니다.
@@ -39,3 +39,9 @@ Required options:
 - `catalog build-manifest --reference-database`
 - `schema audit --include-duplicate-details`
 - `schema audit --duplicate-detail-limit`
+
+Canonical rebuild requirements:
+
+- Rebuild must preserve the 2011+ scope gate even when stored `source_payloads` include legacy rows.
+- Rebuild must preserve occupant request context for occupant-scoped detail endpoints.
+- Rebuild must keep full crawler and file download behavior outside the default command path.

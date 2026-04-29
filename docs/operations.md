@@ -1,4 +1,4 @@
-# Operations
+﻿# Operations
 
 ## Default Verification
 
@@ -71,6 +71,21 @@ After parser or canonical dedupe changes, an existing pilot DB can be rebuilt fr
 When `--test-no` is omitted, rebuild uses distinct test numbers already present in
 `source_payloads`.
 
+## Semantic Cardinality Gate
+
+Before increasing pilot size, the 40-test 2011+ DB must pass schema audit semantic checks:
+
+- `scope.violations = []` and `scope.read_model_violations = []`.
+- duplicate groups for vehicles, test participants, barriers, occupants, restraints,
+  instrumentation channels, and media assets are all zero.
+- `semantic_cardinality.hard_failures = []`.
+- `10001` normalized occupant slots equal 2.
+- `10001` occupant-specific restraint assignments are at least 6.
+- `10001` barrier semantic status is `fixed`, `pass`, or explicitly documented as
+  `accepted_known_condition`.
+- `10003` normalized occupant slots equal 2 and participant pattern includes
+  `subject_vehicle` plus `impactor_vehicle`.
+
 ## 100-Test Expansion Gate
 
 Before a 100-test bounded pilot, run gates in this order:
@@ -78,7 +93,7 @@ Before a 100-test bounded pilot, run gates in this order:
 1. `scripts\verify.ps1`.
 2. `.harness\run.ps1`.
 3. Live safety negative checks.
-4. Recheck the 40-test 2011+ schema audit if the DB is available.
+4. Rebuild and recheck the 40-test 2011+ schema audit if the DB is available.
 5. Build the 100-test manifest only.
 6. Request separate approval before live collection.
 

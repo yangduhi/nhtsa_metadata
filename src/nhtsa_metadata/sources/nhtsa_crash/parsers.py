@@ -24,7 +24,7 @@ API_SECTION_BY_ENDPOINT = {
     "vehicle_documents": "vehicle_documents",
 }
 
-METADATA_SECTIONS = {
+METADATA_SECTIONS = (
     "TEST",
     "VEHICLE",
     "BARRIER",
@@ -35,7 +35,7 @@ METADATA_SECTIONS = {
     "REPORTS",
     "VIDEOS",
     "PHOTOS",
-}
+)
 
 
 def parse_source_payload(fetch_result: SourceFetchResult) -> ParsedSourcePayload:
@@ -64,16 +64,17 @@ def _parse_api_results(fetch_result: SourceFetchResult) -> ParsedSourcePayload:
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
             continue
+        row_data = _row_with_request_context(endpoint_name, row, fetch_result)
         if test_no is None:
-            test_no = _coerce_int(row.get("testNo"))
+            test_no = _coerce_int(row_data.get("testNo"))
         json_path = f"$.results[{index}]"
         source_rows.append(
             SourceRow(
                 endpoint_name=endpoint_name,
                 section_name=section_name,
                 json_path=json_path,
-                row_hash=stable_json_hash(row),
-                data=row,
+                row_hash=stable_json_hash(row_data),
+                data=row_data,
             )
         )
         observations.extend(observe_fields(endpoint_name, section_name, row, json_path))
@@ -129,3 +130,26 @@ def _coerce_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _row_with_request_context(
+    endpoint_name: str, row: dict[str, Any], fetch_result: SourceFetchResult
+) -> dict[str, Any]:
+    if endpoint_name != "restraint_info":
+        return row
+    enriched = dict(row)
+    test_no = fetch_result.request.path_values.get("test_no")
+    vehicle_no = fetch_result.request.path_values.get("vehicle_no")
+    occupant_location = fetch_result.request.path_values.get("occupant_location")
+    if test_no is not None and "testNo" not in enriched and "TSTNO" not in enriched:
+        enriched["testNo"] = test_no
+    if vehicle_no is not None and "vehicleNo" not in enriched and "VEHNO" not in enriched:
+        enriched["vehicleNo"] = vehicle_no
+    if (
+        occupant_location is not None
+        and "occupantLocation" not in enriched
+        and "OCCLOC" not in enriched
+        and "OCCLOCD" not in enriched
+    ):
+        enriched["occupantLocation"] = occupant_location
+    return enriched

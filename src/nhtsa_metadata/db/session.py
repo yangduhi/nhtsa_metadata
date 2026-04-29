@@ -30,6 +30,10 @@ def _ensure_additive_columns(engine: Engine) -> None:
     tables = set(inspector.get_table_names())
     additions = {
         "restraints": {
+            "occupant_location_normalized": "VARCHAR(120)",
+            "restraint_subject_kind": "VARCHAR(64) NOT NULL DEFAULT 'unknown'",
+            "restraint_subject_semantic_key": "TEXT NOT NULL DEFAULT ''",
+            "restraint_subject_semantic_hash": "VARCHAR(64) NOT NULL DEFAULT ''",
             "semantic_key": "TEXT NOT NULL DEFAULT ''",
             "semantic_hash": "VARCHAR(64) NOT NULL DEFAULT ''",
         },

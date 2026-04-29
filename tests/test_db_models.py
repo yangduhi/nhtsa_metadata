@@ -78,7 +78,12 @@ def test_metadata_has_expected_unique_constraints() -> None:
     restraint_constraints = _constraint_columns(Restraint)
     row_source_constraints = _constraint_columns(CanonicalRowSource)
     media_constraints = _constraint_columns(MediaAsset)
-    assert ("test_id", "semantic_hash") in restraint_constraints
+    assert (
+        "test_id",
+        "restraint_subject_kind",
+        "restraint_subject_semantic_hash",
+        "semantic_hash",
+    ) in restraint_constraints
     assert (
         "table_name",
         "row_id",

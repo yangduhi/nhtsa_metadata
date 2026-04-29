@@ -6,10 +6,13 @@ from typing import Any
 
 from nhtsa_metadata.sources.nhtsa_crash.dtos import ParsedSourcePayload, SourceRow
 from nhtsa_metadata.sources.nhtsa_crash.normalization import (
+    canonical_number_text,
     classify_participant,
     filename_from_url,
     infer_asset_kind,
     infer_asset_subtype,
+    normalize_occupant_location,
+    normalize_text,
     parse_date,
     parse_number,
 )
@@ -135,9 +138,9 @@ def _barrier_specs(row: SourceRow) -> list[CanonicalRowSpec]:
     angle = parse_number(angle_raw)
     values = {
         "test_no": test_no,
-        "rigidity": _first(data, "rigidOrDeformableBarrier", "BARRIGD"),
-        "shape": _first(data, "barrierShape", "BARSHPD"),
-        "angle_raw": _to_raw(angle_raw),
+        "rigidity": normalize_text(_first(data, "rigidOrDeformableBarrier", "BARRIGD")),
+        "shape": normalize_text(_first(data, "barrierShape", "BARSHPD")),
+        "angle_raw": canonical_number_text(angle_raw),
         "angle": angle.numeric_value,
     }
     return [
@@ -156,10 +159,11 @@ def _occupant_specs(row: SourceRow) -> list[CanonicalRowSpec]:
     test_no = _first_int(data, "testNo", "TSTNO")
     vehicle_no = _first_int(data, "vehicleNo", "VEHNO")
     location = _first(data, "occupantLocation", "OCCLOC")
+    normalized_location = normalize_occupant_location(location)
     occupant_values = {
         "source_vehicle_no": vehicle_no,
         "occupant_location_raw": str(location or "UNKNOWN"),
-        "occupant_location_normalized": str(location).upper() if location else None,
+        "occupant_location_normalized": normalized_location,
         "occupant_type": _first(data, "occupantType", "OCCTYPD"),
         "dummy_type": data.get("dummyType"),
     }
@@ -203,19 +207,28 @@ def _occupant_specs(row: SourceRow) -> list[CanonicalRowSpec]:
 
 def _restraint_spec(row: SourceRow) -> CanonicalRowSpec:
     data = row.data
+    occupant_location = _first(data, "occupantLocation", "OCCLOC", "OCCLOCD")
+    normalized_location = normalize_occupant_location(occupant_location)
     return CanonicalRowSpec(
         "restraints",
         {
             "test_no": _first_int(data, "testNo", "TSTNO"),
             "source_vehicle_no": _first_int(data, "vehicleNo", "VEHNO"),
-            "occupant_location_raw": _first(data, "occupantLocation", "OCCLOC"),
+            "occupant_location_raw": occupant_location,
+            "occupant_location_normalized": normalized_location,
         },
         {
             "source_vehicle_no": _first_int(data, "vehicleNo", "VEHNO"),
-            "occupant_location_raw": _first(data, "occupantLocation", "OCCLOC"),
+            "occupant_location_raw": occupant_location,
+            "occupant_location_normalized": normalized_location,
             "restraint_type": _first(data, "restraintType", "RSTTYPD"),
             "deployment_status": _first(
-                data, "inflationer", "BeltPretensionerDeployment", "deploymentStatus"
+                data,
+                "inflationer",
+                "BeltPretensionerDeployment",
+                "inflationer/BeltPretensionerDeployment",
+                "deploymentStatus",
+                "DEPLOYD",
             ),
         },
         row,

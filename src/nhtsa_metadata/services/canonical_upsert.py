@@ -28,7 +28,12 @@ from nhtsa_metadata.db.models import (
     Vehicle,
 )
 from nhtsa_metadata.services.canonical_mapper import CanonicalRowSpec
-from nhtsa_metadata.services.semantic_keys import restraint_semantic_key, stable_semantic_hash
+from nhtsa_metadata.services.semantic_keys import (
+    restraint_assignment_semantic_key,
+    restraint_subject_identity,
+    stable_semantic_hash,
+)
+from nhtsa_metadata.sources.nhtsa_crash.normalization import normalize_occupant_location
 
 MODEL_BY_TABLE = {
     "tests": CrashTest,
@@ -83,6 +88,7 @@ class CanonicalUpsertService:
                 row = self._insert_spec(test.id, test_no, source_payload_id, spec)
                 if row is not None:
                     inserted += 1
+        self._backfill_restraint_links(test.id)
         self.session.flush()
         return inserted
 
@@ -162,6 +168,12 @@ class CanonicalUpsertService:
         values = dict(spec.values)
         if spec.table_name == "restraints":
             values.update(_restraint_semantic_values(test_id, values, spec))
+            values.update(self._restraint_link_values(test_id, values))
+            spec = CanonicalRowSpec(spec.table_name, spec.natural_key, values, spec.source_row)
+        elif spec.table_name == "occupants":
+            vehicle_id = self._vehicle_id(test_id, values.get("source_vehicle_no"))
+            if vehicle_id is not None:
+                values["vehicle_id"] = vehicle_id
             spec = CanonicalRowSpec(spec.table_name, spec.natural_key, values, spec.source_row)
         existing = self._existing_unique_row(test_id, spec)
         if existing is not None:
@@ -245,6 +257,17 @@ class CanonicalUpsertService:
                     )
                 )
         if spec.table_name == "occupants":
+            normalized_location = spec.values.get("occupant_location_normalized")
+            if normalized_location is not None:
+                existing = self.session.scalar(
+                    select(Occupant).where(
+                        Occupant.test_id == test_id,
+                        Occupant.source_vehicle_no == spec.values.get("source_vehicle_no"),
+                        Occupant.occupant_location_normalized == normalized_location,
+                    )
+                )
+                if existing is not None:
+                    return existing
             return self.session.scalar(
                 select(Occupant).where(
                     Occupant.test_id == test_id,
@@ -256,10 +279,14 @@ class CanonicalUpsertService:
             )
         if spec.table_name == "restraints":
             semantic_hash = spec.values.get("semantic_hash")
-            if semantic_hash is not None:
+            subject_kind = spec.values.get("restraint_subject_kind")
+            subject_hash = spec.values.get("restraint_subject_semantic_hash")
+            if semantic_hash is not None and subject_kind is not None and subject_hash is not None:
                 return self.session.scalar(
                     select(Restraint).where(
                         Restraint.test_id == test_id,
+                        Restraint.restraint_subject_kind == subject_kind,
+                        Restraint.restraint_subject_semantic_hash == subject_hash,
                         Restraint.semantic_hash == semantic_hash,
                     )
                 )
@@ -336,7 +363,13 @@ class CanonicalUpsertService:
         field_name: str,
         incoming_value: object,
     ) -> None:
-        if field_name in {"semantic_key", "semantic_hash"}:
+        if field_name in {
+            "semantic_key",
+            "semantic_hash",
+            "restraint_subject_kind",
+            "restraint_subject_semantic_key",
+            "restraint_subject_semantic_hash",
+        }:
             return
         field_path = f"{spec.table_name}.{field_name}"
         source_payload_id_a = getattr(existing, "source_payload_id", None)
@@ -370,6 +403,78 @@ class CanonicalUpsertService:
             )
         )
 
+    def _vehicle_id(self, test_id: int, source_vehicle_no: object) -> int | None:
+        if source_vehicle_no is None:
+            return None
+        return self.session.scalar(
+            select(Vehicle.id).where(
+                Vehicle.test_id == test_id,
+                Vehicle.source_vehicle_no == source_vehicle_no,
+            )
+        )
+
+    def _restraint_link_values(self, test_id: int, values: dict[str, Any]) -> dict[str, int]:
+        link_values: dict[str, int] = {}
+        vehicle_id = self._vehicle_id(test_id, values.get("source_vehicle_no"))
+        if vehicle_id is not None:
+            link_values["vehicle_id"] = vehicle_id
+        occupant_id = self._occupant_id(
+            test_id,
+            values.get("source_vehicle_no"),
+            values.get("occupant_location_normalized"),
+            values.get("occupant_location_raw"),
+        )
+        if occupant_id is not None:
+            link_values["occupant_id"] = occupant_id
+        return link_values
+
+    def _occupant_id(
+        self,
+        test_id: int,
+        source_vehicle_no: object,
+        occupant_location_normalized: object,
+        occupant_location_raw: object,
+    ) -> int | None:
+        normalized = (
+            str(occupant_location_normalized)
+            if occupant_location_normalized is not None
+            else normalize_occupant_location(occupant_location_raw)
+        )
+        if normalized:
+            occupant_id = self.session.scalar(
+                select(Occupant.id).where(
+                    Occupant.test_id == test_id,
+                    Occupant.source_vehicle_no == source_vehicle_no,
+                    Occupant.occupant_location_normalized == normalized,
+                )
+            )
+            if occupant_id is not None:
+                return occupant_id
+        if occupant_location_raw is None:
+            return None
+        return self.session.scalar(
+            select(Occupant.id).where(
+                Occupant.test_id == test_id,
+                Occupant.source_vehicle_no == source_vehicle_no,
+                Occupant.occupant_location_raw == str(occupant_location_raw),
+            )
+        )
+
+    def _backfill_restraint_links(self, test_id: int) -> None:
+        restraints = list(
+            self.session.scalars(select(Restraint).where(Restraint.test_id == test_id))
+        )
+        for restraint in restraints:
+            if restraint.vehicle_id is None:
+                restraint.vehicle_id = self._vehicle_id(test_id, restraint.source_vehicle_no)
+            if restraint.occupant_id is None:
+                restraint.occupant_id = self._occupant_id(
+                    test_id,
+                    restraint.source_vehicle_no,
+                    restraint.occupant_location_normalized,
+                    restraint.occupant_location_raw,
+                )
+
 
 def _lineage_values(source_payload_id: int | None, spec: CanonicalRowSpec) -> dict[str, Any]:
     return {
@@ -385,15 +490,26 @@ def _lineage_values(source_payload_id: int | None, spec: CanonicalRowSpec) -> di
 def _restraint_semantic_values(
     test_id: int, values: dict[str, Any], spec: CanonicalRowSpec
 ) -> dict[str, str]:
-    key = restraint_semantic_key(
-        test_id=test_id,
+    subject_kind, subject_key, subject_hash = restraint_subject_identity(
         source_vehicle_no=values.get("source_vehicle_no"),
+        occupant_location_normalized=values.get("occupant_location_normalized"),
         occupant_location_raw=values.get("occupant_location_raw"),
+    )
+    key = restraint_assignment_semantic_key(
+        test_id=test_id,
+        restraint_subject_kind=subject_kind,
+        restraint_subject_semantic_key=subject_key,
         restraint_type=values.get("restraint_type"),
         deployment_status=values.get("deployment_status"),
         raw_row=spec.source_row.data,
     )
-    return {"semantic_key": key, "semantic_hash": stable_semantic_hash(key)}
+    return {
+        "restraint_subject_kind": subject_kind,
+        "restraint_subject_semantic_key": subject_key,
+        "restraint_subject_semantic_hash": subject_hash,
+        "semantic_key": key,
+        "semantic_hash": stable_semantic_hash(key),
+    }
 
 
 def _endpoint_priority(endpoint_name: str | None) -> int:
