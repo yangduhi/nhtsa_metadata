@@ -1,7 +1,14 @@
 from sqlalchemy import inspect
 
 from nhtsa_metadata.config import Settings
-from nhtsa_metadata.db.models import Base, CrashTest, SourcePayload
+from nhtsa_metadata.db.models import (
+    Base,
+    CanonicalRowSource,
+    CrashTest,
+    MediaAsset,
+    Restraint,
+    SourcePayload,
+)
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
     create_session_factory,
@@ -68,4 +75,24 @@ def test_metadata_has_expected_unique_constraints() -> None:
         if hasattr(constraint, "columns")
     }
     assert ("endpoint_name", "canonical_url_hash", "payload_hash") in source_payload_constraints
+    restraint_constraints = _constraint_columns(Restraint)
+    row_source_constraints = _constraint_columns(CanonicalRowSource)
+    media_constraints = _constraint_columns(MediaAsset)
+    assert ("test_id", "semantic_hash") in restraint_constraints
+    assert (
+        "table_name",
+        "row_id",
+        "source_payload_id",
+        "source_row_path",
+        "source_row_hash",
+    ) in row_source_constraints
+    assert ("test_id", "asset_kind", "canonical_url_hash") in media_constraints
     assert "media_assets" in Base.metadata.tables
+
+
+def _constraint_columns(model) -> set[tuple[str, ...]]:  # type: ignore[no-untyped-def]
+    return {
+        tuple(column.name for column in constraint.columns)
+        for constraint in model.__table__.constraints
+        if hasattr(constraint, "columns")
+    }

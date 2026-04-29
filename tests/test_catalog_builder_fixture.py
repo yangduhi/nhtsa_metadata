@@ -5,7 +5,9 @@ from nhtsa_metadata.db.models import (
     CollectionRun,
     CrashTest,
     MediaAsset,
+    SourcePayload,
     TestClassification,
+    TestFilterSummary,
     TestParticipant,
     Vehicle,
 )
@@ -32,9 +34,24 @@ def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> Non
             for participant in session.scalars(select(TestParticipant))
         )
         assert session.scalars(select(MediaAsset)).first() is not None
+        assert (
+            len(
+                session.scalars(
+                    select(SourcePayload).where(SourcePayload.endpoint_name == "restraint_info")
+                ).all()
+            )
+            == 4
+        )
         assert _duplicate_vehicle_groups(session) == []
         assert _duplicate_participant_groups(session) == []
         assert _duplicate_barrier_groups(session) == []
+        summaries = {
+            row.test_no: row
+            for row in session.scalars(
+                select(TestFilterSummary).order_by(TestFilterSummary.test_no)
+            )
+        }
+        assert summaries[10001].has_uds_or_tdms_package is True
         classifications = {
             row.test_no: row
             for row in session.scalars(

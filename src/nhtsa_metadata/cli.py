@@ -5,10 +5,11 @@ from typing import Annotated
 import typer
 from rich.console import Console
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from nhtsa_metadata import __version__
 from nhtsa_metadata.config import Settings, get_settings
-from nhtsa_metadata.db.models import CrashTest
+from nhtsa_metadata.db.models import CrashTest, SourcePayload
 from nhtsa_metadata.db.session import (
     create_engine_for_settings,
     create_session_factory,
@@ -152,14 +153,21 @@ def catalog_build_manifest(
 
 @catalog_app.command("rebuild")
 def catalog_rebuild(
-    test_no: Annotated[int, typer.Option("--test-no")],
+    test_no: Annotated[int | None, typer.Option("--test-no")] = None,
     database_url: Annotated[str | None, typer.Option("--database-url")] = None,
 ) -> None:
     session_factory = _session_factory(database_url)
     with session_factory() as session:
-        inserted = IngestionService(session).rebuild_test(test_no)
+        service = IngestionService(session)
+        test_numbers = [test_no] if test_no is not None else _source_payload_test_numbers(session)
+        inserted = sum(service.rebuild_test(number) for number in test_numbers)
         session.commit()
-    console.print(json.dumps({"test_no": test_no, "canonical_rows": inserted}, sort_keys=True))
+    console.print(
+        json.dumps(
+            {"test_numbers": test_numbers, "canonical_rows": inserted},
+            sort_keys=True,
+        )
+    )
 
 
 @catalog_app.command("assert-live-baseline")
@@ -202,10 +210,20 @@ def scale_report(
 def schema_audit(
     database_url: Annotated[str | None, typer.Option("--database-url")] = None,
     output: Annotated[Path | None, typer.Option("--output")] = None,
+    include_duplicate_details: Annotated[
+        bool, typer.Option("--include-duplicate-details")
+    ] = False,
+    duplicate_detail_limit: Annotated[int, typer.Option("--duplicate-detail-limit")] = 50,
 ) -> None:
     session_factory = _session_factory(database_url)
     with session_factory() as session:
-        payload = report_to_dict(SchemaAuditService(session).report())
+        payload = report_to_dict(
+            SchemaAuditService(
+                session,
+                include_duplicate_details=include_duplicate_details,
+                duplicate_detail_limit=duplicate_detail_limit,
+            ).report()
+        )
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -226,6 +244,19 @@ def _session_factory_for_settings(effective_settings: Settings):
     engine = create_engine_for_settings(effective_settings)
     ensure_schema(engine)
     return create_session_factory(effective_settings)
+
+
+def _source_payload_test_numbers(session: Session) -> list[int]:
+    test_numbers: list[int] = []
+    for test_no in session.scalars(
+        select(SourcePayload.test_no)
+        .where(SourcePayload.test_no.is_not(None))
+        .distinct()
+        .order_by(SourcePayload.test_no)
+    ):
+        if test_no is not None:
+            test_numbers.append(test_no)
+    return test_numbers
 
 
 if __name__ == "__main__":

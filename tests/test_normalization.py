@@ -1,6 +1,7 @@
 from nhtsa_metadata.sources.nhtsa_crash.normalization import (
     classify_participant,
     infer_asset_kind,
+    infer_asset_subtype,
     parse_date,
     parse_number,
     stable_json_hash,
@@ -29,7 +30,8 @@ def test_asset_kind_inference() -> None:
     assert infer_asset_kind("x.JPG") == "photo"
     assert infer_asset_kind("x.mp4") == "video"
     assert infer_asset_kind("x.pdf") == "report"
-    assert infer_asset_kind("x.tdms.zip") == "tdms"
+    assert infer_asset_kind("x.tdms.zip") == "data_package"
+    assert infer_asset_subtype("x.tdms.zip") == "TDMS"
 
 
 def test_impactor_participant_classification() -> None:

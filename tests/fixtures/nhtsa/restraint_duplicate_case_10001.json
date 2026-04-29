@@ -1,0 +1,7 @@
+{
+  "meta": {"pagination": {"pageNumber": 0, "count": 2, "total": 2}, "status": 200, "message": "Success", "error": ""},
+  "results": [
+    {"testNo": 10001, "vehicleNo": 1, "occupantLocation": "DRIVER", "restraintType": "AIR BAG", "inflationer": "DEPLOYED"},
+    {"testNo": 10001, "vehicleNo": 1, "occupantLocation": " driver ", "restraintType": " air   bag ", "deploymentStatus": "deployed"}
+  ]
+}

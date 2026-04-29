@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -19,12 +21,14 @@ from nhtsa_metadata.db.models import (
     MediaAsset,
     Occupant,
     Restraint,
+    SourceConflict,
     TestFacet,
     TestFilterSummary,
     TestParticipant,
     Vehicle,
 )
 from nhtsa_metadata.services.canonical_mapper import CanonicalRowSpec
+from nhtsa_metadata.services.semantic_keys import restraint_semantic_key, stable_semantic_hash
 
 MODEL_BY_TABLE = {
     "tests": CrashTest,
@@ -69,6 +73,8 @@ class CanonicalUpsertService:
     ) -> int:
         test = self.session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
         if test is not None:
+            self._delete_canonical_row_sources(test.id)
+            self.session.execute(delete(SourceConflict).where(SourceConflict.test_no == test_no))
             self._delete_child_rows(test.id)
         inserted = 0
         test = self._upsert_test(test_no, specs_by_payload)
@@ -88,6 +94,24 @@ class CanonicalUpsertService:
                 self.session.execute(delete(model).where(model.test_id == test_id))
             elif model is TestFacet or model is FieldCoverageSnapshot:
                 continue
+        self.session.flush()
+
+    def _delete_canonical_row_sources(self, test_id: int) -> None:
+        for table_name, model in MODEL_BY_TABLE.items():
+            if table_name == "tests" or not hasattr(model, "test_id"):
+                continue
+            model_any: Any = model
+            row_ids = list(
+                self.session.scalars(select(model_any.id).where(model_any.test_id == test_id))
+            )
+            if not row_ids:
+                continue
+            self.session.execute(
+                delete(CanonicalRowSource).where(
+                    CanonicalRowSource.table_name == table_name,
+                    CanonicalRowSource.row_id.in_(row_ids),
+                )
+            )
         self.session.flush()
 
     def _upsert_test(
@@ -123,12 +147,15 @@ class CanonicalUpsertService:
         model = MODEL_BY_TABLE.get(spec.table_name)
         if model is None:
             return None
+        values = dict(spec.values)
+        if spec.table_name == "restraints":
+            values.update(_restraint_semantic_values(test_id, values, spec))
+            spec = CanonicalRowSpec(spec.table_name, spec.natural_key, values, spec.source_row)
         existing = self._existing_unique_row(test_id, spec)
         if existing is not None:
-            self._merge_non_null_values(existing, spec)
+            self._merge_values(test_no, existing, source_payload_id, spec)
             self._attach_source(existing, source_payload_id, spec)
             return None
-        values = dict(spec.values)
         values.update(_lineage_values(source_payload_id, spec))
         if "test_id" in model.__table__.columns:
             values["test_id"] = test_id
@@ -215,6 +242,15 @@ class CanonicalUpsertService:
                     ),
                 )
             )
+        if spec.table_name == "restraints":
+            semantic_hash = spec.values.get("semantic_hash")
+            if semantic_hash is not None:
+                return self.session.scalar(
+                    select(Restraint).where(
+                        Restraint.test_id == test_id,
+                        Restraint.semantic_hash == semantic_hash,
+                    )
+                )
         if spec.table_name == "media_assets":
             return self.session.scalar(
                 select(MediaAsset).where(
@@ -232,11 +268,26 @@ class CanonicalUpsertService:
             )
         return None
 
-    def _merge_non_null_values(self, existing: object, spec: CanonicalRowSpec) -> None:
+    def _merge_values(
+        self,
+        test_no: int,
+        existing: object,
+        source_payload_id: int,
+        spec: CanonicalRowSpec,
+    ) -> None:
         for key, value in spec.values.items():
             if value is None or not hasattr(existing, key):
                 continue
-            if getattr(existing, key) is None:
+            existing_value = getattr(existing, key)
+            if existing_value is None:
+                setattr(existing, key, value)
+                continue
+            if _values_equivalent(existing_value, value):
+                continue
+            self._record_conflict(test_no, existing, source_payload_id, spec, key, value)
+            if _endpoint_priority(spec.source_row.endpoint_name) < _endpoint_priority(
+                getattr(existing, "source_endpoint_name", None)
+            ):
                 setattr(existing, key, value)
 
     def _attach_source(
@@ -264,6 +315,49 @@ class CanonicalUpsertService:
             )
         )
 
+    def _record_conflict(
+        self,
+        test_no: int,
+        existing: object,
+        source_payload_id: int,
+        spec: CanonicalRowSpec,
+        field_name: str,
+        incoming_value: object,
+    ) -> None:
+        if field_name in {"semantic_key", "semantic_hash"}:
+            return
+        field_path = f"{spec.table_name}.{field_name}"
+        source_payload_id_a = getattr(existing, "source_payload_id", None)
+        existing_conflict = self.session.scalar(
+            select(SourceConflict).where(
+                SourceConflict.test_no == test_no,
+                SourceConflict.conflict_type == "canonical_value_conflict",
+                SourceConflict.field_path == field_path,
+                SourceConflict.source_payload_id_a == source_payload_id_a,
+                SourceConflict.source_payload_id_b == source_payload_id,
+            )
+        )
+        if existing_conflict is not None:
+            return
+        row_any: Any = existing
+        self.session.add(
+            SourceConflict(
+                test_no=test_no,
+                conflict_type="canonical_value_conflict",
+                field_path=field_path,
+                source_payload_id_a=source_payload_id_a,
+                source_payload_id_b=source_payload_id,
+                details_json={
+                    "table_name": spec.table_name,
+                    "row_id": row_any.id,
+                    "existing_endpoint": getattr(existing, "source_endpoint_name", None),
+                    "incoming_endpoint": spec.source_row.endpoint_name,
+                    "existing_value": _json_safe(getattr(existing, field_name)),
+                    "incoming_value": _json_safe(incoming_value),
+                },
+            )
+        )
+
 
 def _lineage_values(source_payload_id: int | None, spec: CanonicalRowSpec) -> dict[str, Any]:
     return {
@@ -274,3 +368,52 @@ def _lineage_values(source_payload_id: int | None, spec: CanonicalRowSpec) -> di
         "source_row_hash": spec.source_row.row_hash,
         "raw_row_json": spec.source_row.data,
     }
+
+
+def _restraint_semantic_values(
+    test_id: int, values: dict[str, Any], spec: CanonicalRowSpec
+) -> dict[str, str]:
+    key = restraint_semantic_key(
+        test_id=test_id,
+        source_vehicle_no=values.get("source_vehicle_no"),
+        occupant_location_raw=values.get("occupant_location_raw"),
+        restraint_type=values.get("restraint_type"),
+        deployment_status=values.get("deployment_status"),
+        raw_row=spec.source_row.data,
+    )
+    return {"semantic_key": key, "semantic_hash": stable_semantic_hash(key)}
+
+
+def _endpoint_priority(endpoint_name: str | None) -> int:
+    priorities = {
+        "restraint_info": 0,
+        "occupant_detail": 1,
+        "occupant_info": 2,
+        "test_detail": 3,
+        "metadata_export": 4,
+    }
+    return priorities.get(endpoint_name or "", 99)
+
+
+def _values_equivalent(left: object, right: object) -> bool:
+    if isinstance(left, Decimal):
+        left = float(left)
+    if isinstance(right, Decimal):
+        right = float(right)
+    if isinstance(left, int | float) and isinstance(right, int | float):
+        return float(left) == float(right)
+    return str(left) == str(right)
+
+
+def _json_safe(value: object) -> object:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, date | datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)

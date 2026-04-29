@@ -16,6 +16,8 @@ Phase 2 implements the initial SQLAlchemy/Alembic schema.
 
 `source_payloads` is immutable by `(endpoint_name, canonical_url_hash, payload_hash)`.
 `source_payload_observations` records each fetch observation.
+`canonical_row_sources` is idempotent by `(table_name, row_id, source_payload_id,
+source_row_path, source_row_hash)` so repeated observations can attach to one canonical row.
 
 ## Canonical
 
@@ -36,6 +38,14 @@ Phase 2 implements the initial SQLAlchemy/Alembic schema.
 Canonical domain tables include lineage columns where rows are derived from raw source payloads:
 `source_payload_id`, `source_endpoint_name`, `source_section_name`, `source_row_path`,
 `source_row_hash`, `raw_row_json`, and `extra_json`.
+
+`restraints` uses semantic identity columns `semantic_key` and `semantic_hash`.
+The unique canonical identity is `(test_id, semantic_hash)`; duplicate source observations
+attach through `canonical_row_sources` instead of creating additional restraint rows.
+
+`media_assets` stores `asset_kind` and optional `asset_subtype`. Data-package candidates such
+as UDS, EV, ABF, ISO, TDMS, and ZIP are represented with `asset_kind = data_package` and the
+specific subtype in `asset_subtype`.
 
 ## Read Model
 

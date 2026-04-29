@@ -39,6 +39,26 @@ powershell -ExecutionPolicy Bypass -File scripts\live_pilot_validate.ps1 `
 
 The pilot remains bounded by manifest and must not be treated as a full crawler.
 
+Schema audit can include duplicate details without raw payload text:
+
+```powershell
+.venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
+  --database-url sqlite:///data/stratified_live_pilot.sqlite `
+  --output data\schema_audit_report.json `
+  --include-duplicate-details
+```
+
+After parser or canonical dedupe changes, an existing pilot DB can be rebuilt from stored
+`source_payloads` without live calls:
+
+```powershell
+.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog rebuild `
+  --database-url sqlite:///data/stratified_live_pilot.sqlite
+```
+
+When `--test-no` is omitted, rebuild uses distinct test numbers already present in
+`source_payloads`.
+
 ## Source Contract Documents
 
 Phase 1 requires these documents:

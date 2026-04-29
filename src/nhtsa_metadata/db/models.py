@@ -198,6 +198,15 @@ class SourceConflict(TimestampMixin, Base):
 
 class CanonicalRowSource(TimestampMixin, Base):
     __tablename__ = "canonical_row_sources"
+    __table_args__ = (
+        UniqueConstraint(
+            "table_name",
+            "row_id",
+            "source_payload_id",
+            "source_row_path",
+            "source_row_hash",
+        ),
+    )
 
     id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
     table_name: Mapped[str] = sa_mapped_column(String(120), nullable=False)
@@ -310,6 +319,7 @@ class Occupant(LineageMixin, TimestampMixin, Base):
 
 class Restraint(LineageMixin, TimestampMixin, Base):
     __tablename__ = "restraints"
+    __table_args__ = (UniqueConstraint("test_id", "semantic_hash"),)
 
     id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
     test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
@@ -319,6 +329,8 @@ class Restraint(LineageMixin, TimestampMixin, Base):
     occupant_location_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
     restraint_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
     deployment_status: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    semantic_key: Mapped[str] = sa_mapped_column(Text, default="", nullable=False)
+    semantic_hash: Mapped[str] = sa_mapped_column(String(64), default="", nullable=False)
 
 
 class InstrumentationChannel(LineageMixin, TimestampMixin, Base):
@@ -395,6 +407,7 @@ class MediaAsset(LineageMixin, TimestampMixin, Base):
     id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
     test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
     asset_kind: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    asset_subtype: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
     source_url: Mapped[str] = sa_mapped_column(Text, nullable=False)
     canonical_url_hash: Mapped[str] = sa_mapped_column(String(64), nullable=False)
     file_ext: Mapped[str | None] = sa_mapped_column(String(32), nullable=True)

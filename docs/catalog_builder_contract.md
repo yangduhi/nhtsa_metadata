@@ -8,8 +8,10 @@ python -m nhtsa_metadata.cli catalog collect-test --test-no 10001 --source fixtu
 python -m nhtsa_metadata.cli catalog collect --manifest tests/fixtures/live_sample_manifest.csv --source fixture
 python -m nhtsa_metadata.cli catalog build-manifest --source live --allow-live --output data/stratified_live_pilot_manifest.csv
 python -m nhtsa_metadata.cli catalog rebuild --test-no 10001
+python -m nhtsa_metadata.cli catalog rebuild
 python -m nhtsa_metadata.cli coverage report
 python -m nhtsa_metadata.cli schema audit --database-url sqlite:///data/stratified_live_pilot.sqlite --output data/schema_audit_report.json
+python -m nhtsa_metadata.cli schema audit --include-duplicate-details --duplicate-detail-limit 50
 ```
 
 Required options:
@@ -29,3 +31,5 @@ Required options:
 - `--resume`
 - `--max-pages`
 - `--max-items`
+- `schema audit --include-duplicate-details`
+- `schema audit --duplicate-detail-limit`

@@ -9,6 +9,7 @@ from nhtsa_metadata.sources.nhtsa_crash.normalization import (
     classify_participant,
     filename_from_url,
     infer_asset_kind,
+    infer_asset_subtype,
     parse_date,
     parse_number,
 )
@@ -49,9 +50,7 @@ def map_to_canonical_specs(parsed: ParsedSourcePayload) -> list[CanonicalRowSpec
             "VIDEOS",
             "PHOTOS",
         }:
-            asset = _media_asset_spec(row)
-            if asset is not None:
-                specs.append(asset)
+            specs.extend(_media_asset_specs(row))
     return specs
 
 
@@ -269,14 +268,33 @@ def _intrusion_spec(row: SourceRow) -> CanonicalRowSpec:
     )
 
 
-def _media_asset_spec(row: SourceRow) -> CanonicalRowSpec | None:
+def _media_asset_specs(row: SourceRow) -> list[CanonicalRowSpec]:
     data = row.data
     url = _first(data, "url", "URL")
-    if not url:
-        return None
-    url_text = str(url)
-    document_type = _first(data, "documentType", "type")
+    if url:
+        return [_media_asset_spec(row, str(url), _first(data, "documentType", "type"))]
+    specs: list[CanonicalRowSpec] = []
+    for key, subtype in (
+        ("udsFiles", "UDS"),
+        ("evFiles", "EV"),
+        ("abfFiles", "ABF"),
+        ("isoFiles", "ISO"),
+        ("tdmsFiles", "TDMS"),
+    ):
+        value = data.get(key)
+        if value:
+            specs.append(_media_asset_spec(row, str(value), subtype))
+    return specs
+
+
+def _media_asset_spec(
+    row: SourceRow, url_text: str, document_type: object | None
+) -> CanonicalRowSpec:
+    data = row.data
     asset_kind = infer_asset_kind(url_text, None if document_type is None else str(document_type))
+    asset_subtype = infer_asset_subtype(
+        url_text, None if document_type is None else str(document_type)
+    )
     return CanonicalRowSpec(
         "media_assets",
         {
@@ -286,6 +304,7 @@ def _media_asset_spec(row: SourceRow) -> CanonicalRowSpec | None:
         },
         {
             "asset_kind": asset_kind,
+            "asset_subtype": asset_subtype,
             "source_url": url_text,
             "canonical_url_hash": hashlib.sha256(url_text.encode("utf-8")).hexdigest(),
             "file_ext": _file_ext(filename_from_url(url_text)),

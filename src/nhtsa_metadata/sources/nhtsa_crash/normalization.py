@@ -62,19 +62,36 @@ def infer_asset_kind(url: str, document_type: str | None = None) -> str:
         return "video"
     if ".pdf" in lowered:
         return "report"
-    if "uds" in lowered:
-        return "uds"
-    if "tdms" in lowered:
-        return "tdms"
-    if "abf" in lowered:
-        return "abf"
-    if "iso" in lowered:
-        return "iso"
-    if ".zip" in lowered:
+    if infer_asset_subtype(url, document_type) in {"UDS", "EV", "ABF", "ISO", "TDMS", "ZIP"}:
         return "data_package"
     if "document" in lowered:
         return "document"
     return "other"
+
+
+def infer_asset_subtype(url: str, document_type: str | None = None) -> str:
+    lowered = f"{url} {document_type or ''}".lower()
+    if "tdms" in lowered:
+        return "TDMS"
+    if "uds" in lowered:
+        return "UDS"
+    if re_match_token(lowered, "ev"):
+        return "EV"
+    if "abf" in lowered:
+        return "ABF"
+    if "iso" in lowered:
+        return "ISO"
+    if ".zip" in lowered:
+        return "ZIP"
+    if ".pdf" in lowered:
+        return "PDF"
+    if any(token in lowered for token in (".htm", ".html")):
+        return "HTML"
+    return "UNKNOWN"
+
+
+def re_match_token(value: str, token: str) -> bool:
+    return f"/{token}/" in value or f".{token}" in value or f" {token}" in value
 
 
 def filename_from_url(url: str) -> str | None:

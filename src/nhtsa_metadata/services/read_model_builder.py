@@ -36,6 +36,7 @@ class ReadModelBuilder:
             self.session.scalars(select(TestParticipant).where(TestParticipant.test_id == test.id))
         )
         asset_kinds = sorted({asset.asset_kind for asset in assets})
+        asset_subtypes = {asset.asset_subtype for asset in assets if asset.asset_subtype}
         impact_angle = float(test.impact_angle) if test.impact_angle is not None else None
         impact_direction = _impact_direction(impact_angle)
         counterparty_kind = _counterparty_kind(participants)
@@ -57,7 +58,10 @@ class ReadModelBuilder:
                     {participant.participant_kind for participant in participants}
                 ),
                 asset_kinds_json=asset_kinds,
-                has_uds_or_tdms_package=bool({"uds", "tdms"} & set(asset_kinds)),
+                has_uds_or_tdms_package=bool(
+                    {"uds", "tdms"} & {kind.lower() for kind in asset_kinds}
+                    or {"UDS", "TDMS"} & asset_subtypes
+                ),
             )
         )
         self.session.add(
@@ -104,6 +108,8 @@ class ReadModelBuilder:
                 _add(facet_counts, "participant_kind", value)
             for value in summary.asset_kinds_json or []:
                 _add(facet_counts, "asset_kind", value)
+            if summary.has_uds_or_tdms_package:
+                _add(facet_counts, "data_package_subtype", "UDS_OR_TDMS")
         for (name, value), count in facet_counts.items():
             self.session.add(TestFacet(facet_name=name, facet_value=value, test_count=count))
         self.session.flush()

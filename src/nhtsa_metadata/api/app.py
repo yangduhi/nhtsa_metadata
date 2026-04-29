@@ -101,6 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "media_assets": [
                     {
                         "asset_kind": asset.asset_kind,
+                        "asset_subtype": asset.asset_subtype,
                         "source_url": asset.source_url,
                         "suggested_filename": asset.suggested_filename,
                     }

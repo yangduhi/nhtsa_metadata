@@ -26,7 +26,8 @@ $env:NHTSA_METADATA_ALLOW_LIVE = "true"
 .venv\Scripts\python.exe -m nhtsa_metadata.cli coverage report --database-url $DatabaseUrl
 .venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
     --database-url $DatabaseUrl `
-    --output $AuditOutput
+    --output $AuditOutput `
+    --include-duplicate-details
 .venv\Scripts\python.exe -m nhtsa_metadata.cli scale report --database-url $DatabaseUrl
 
 $env:NHTSA_METADATA_PILOT_DB_URL = $DatabaseUrl

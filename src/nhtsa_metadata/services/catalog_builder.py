@@ -4,6 +4,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -81,6 +82,7 @@ class CatalogBuilder:
 
     def _fetch_fixture_matrix(self, test_no: int) -> list[SourceFetchResult]:
         results: list[SourceFetchResult] = []
+        occupant_result: SourceFetchResult | None = None
         for endpoint_name in (
             "test_summary",
             "metadata_export",
@@ -91,20 +93,60 @@ class CatalogBuilder:
             "multimedia_files",
             "vehicle_documents",
         ):
-            results.append(self.client.fetch(endpoint_name, test_no=test_no))
-        if test_no == 10001:
+            result = self.client.fetch(endpoint_name, test_no=test_no)
+            results.append(result)
+            if endpoint_name == "occupant_info":
+                occupant_result = result
+        for vehicle_no, occupant_location in _restraint_requests_from_occupants(occupant_result):
             results.append(
                 self.client.fetch(
-                    "restraint_info", test_no=10001, vehicle_no=1, occupant_location="DRIVER"
+                    "restraint_info",
+                    test_no=test_no,
+                    vehicle_no=vehicle_no,
+                    occupant_location=occupant_location,
                 )
             )
+        if test_no == 10001:
             results.append(self.client.fetch("intrusion_info", test_no=10001, vehicle_no=1))
         if test_no == 10003:
-            results.append(
-                self.client.fetch(
-                    "restraint_info", test_no=10003, vehicle_no=2, occupant_location="DRIVER"
-                )
-            )
             results.append(self.client.fetch("intrusion_info", test_no=10003, vehicle_no=2))
         results.extend(self.client.fetch_all_pages("instrumentation_info", test_no=test_no))
         return results
+
+
+def _restraint_requests_from_occupants(
+    occupant_result: SourceFetchResult | None,
+) -> list[tuple[int, str]]:
+    if occupant_result is None:
+        return []
+    results = occupant_result.payload.get("results", [])
+    rows = results if isinstance(results, list) else []
+    requests: list[tuple[int, str]] = []
+    seen: set[tuple[int, str]] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        vehicle_no = _to_int(_first(row, "vehicleNo", "VEHNO"))
+        occupant_location = _first(row, "occupantLocation", "OCCLOC")
+        if vehicle_no is None or occupant_location in (None, ""):
+            continue
+        key = (vehicle_no, str(occupant_location))
+        if key in seen:
+            continue
+        seen.add(key)
+        requests.append(key)
+    return requests
+
+
+def _first(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row:
+            return row[key]
+    return None
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
