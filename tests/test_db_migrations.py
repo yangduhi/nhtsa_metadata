@@ -7,8 +7,17 @@ def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-unt
     database_url = f"sqlite:///{tmp_path / 'migration.sqlite'}"
     upgrade_head(database_url)
     engine = create_engine(database_url)
-    assert "source_payloads" in inspect(engine).get_table_names()
-    assert "tests" in inspect(engine).get_table_names()
+    table_names = inspect(engine).get_table_names()
+    assert "source_payloads" in table_names
+    assert "tests" in table_names
+    assert "discovery_runs" in table_names
+    assert "discovery_manifest_rows" in table_names
+    assert "discovery_authority_decisions" in table_names
+
+    unique_constraints = inspect(engine).get_unique_constraints("discovery_manifest_rows")
+    unique_sets = {tuple(item["column_names"]) for item in unique_constraints}
+    assert ("discovery_run_id", "test_no") in unique_sets
+    assert ("discovery_run_id", "row_hash") in unique_sets
 
     downgrade_base(database_url)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}

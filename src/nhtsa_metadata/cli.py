@@ -19,6 +19,10 @@ from nhtsa_metadata.db.session import (
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.code_values import CodeValueRebuildService
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.discovery_authority import (
+    run_discovery_diagnostics,
+    validate_reference_discovery,
+)
 from nhtsa_metadata.services.endpoint_completeness import (
     EndpointBackfillService,
     EndpointCompletenessService,
@@ -207,6 +211,124 @@ def catalog_build_manifest(
         or (Path(settings.reference_database_path) if settings.reference_database_path else None),
     )
     console.print(json.dumps(report.__dict__, sort_keys=True))
+
+
+@catalog_app.command("discovery-diagnostics")
+def catalog_discovery_diagnostics(
+    output: Annotated[Path, typer.Option("--output")],
+    markdown_output: Annotated[Path, typer.Option("--markdown-output")],
+    source: Annotated[str, typer.Option("--source")] = "live",
+    allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
+    live_manifest: Annotated[Path, typer.Option("--live-manifest")] = Path(
+        "data/full_2011plus_manifest.csv"
+    ),
+    reference_database: Annotated[Path | None, typer.Option("--reference-database")] = None,
+    min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+    year_from: Annotated[int, typer.Option("--year-from")] = 2011,
+    year_to: Annotated[int, typer.Option("--year-to")] = 2026,
+    page_size: Annotated[int, typer.Option("--page-size")] = 100,
+    max_pages_per_slice: Annotated[int, typer.Option("--max-pages-per-slice")] = 1000,
+    year_slice_manifest_output: Annotated[
+        Path | None, typer.Option("--year-slice-manifest-output")
+    ] = None,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
+    retry_count: Annotated[int | None, typer.Option("--retry-count")] = None,
+    timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds")] = None,
+) -> None:
+    if source != "live":
+        raise typer.BadParameter("discovery-diagnostics currently supports --source live only")
+    if not allow_live:
+        raise LiveAccessNotAllowedError("--source live requires --allow-live")
+    settings = _effective_settings(None)
+    client = LiveNhtsaClient(
+        settings,
+        allow_live=allow_live,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
+        rate_limit_delay_seconds=rate_limit_delay_seconds,
+    )
+    reference_path = reference_database or (
+        Path(settings.reference_database_path) if settings.reference_database_path else None
+    )
+    if reference_path is None:
+        raise typer.BadParameter("--reference-database is required")
+    payload = run_discovery_diagnostics(
+        client=client,
+        full_manifest=live_manifest,
+        reference_database=reference_path,
+        min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        year_from=year_from,
+        year_to=year_to,
+        output=output,
+        markdown_output=markdown_output,
+        discovery_page_size=page_size,
+        max_pages_per_slice=max_pages_per_slice,
+        year_slice_manifest_output=year_slice_manifest_output,
+    )
+    console.print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
+
+
+@catalog_app.command("validate-reference-discovery")
+def catalog_validate_reference_discovery(
+    reference_database: Annotated[Path, typer.Option("--reference-database")],
+    live_manifest: Annotated[Path, typer.Option("--live-manifest")],
+    output: Annotated[Path, typer.Option("--output")],
+    validated_manifest_output: Annotated[Path, typer.Option("--validated-manifest-output")],
+    markdown_output: Annotated[Path, typer.Option("--markdown-output")],
+    source: Annotated[str, typer.Option("--source")] = "live",
+    allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
+    min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+    validation_endpoints: Annotated[
+        str, typer.Option("--validation-endpoints")
+    ] = "test_summary,test_detail,metadata_export",
+    authoritative_manifest_output: Annotated[
+        Path | None, typer.Option("--authoritative-manifest-output")
+    ] = None,
+    authoritative_meta_output: Annotated[
+        Path | None, typer.Option("--authoritative-meta-output")
+    ] = None,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
+    retry_count: Annotated[int | None, typer.Option("--retry-count")] = None,
+    timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds")] = None,
+) -> None:
+    if source != "live":
+        raise typer.BadParameter(
+            "validate-reference-discovery currently supports --source live only"
+        )
+    if not allow_live:
+        raise LiveAccessNotAllowedError("--source live requires --allow-live")
+    if (authoritative_manifest_output is None) != (authoritative_meta_output is None):
+        raise typer.BadParameter(
+            "--authoritative-manifest-output and --authoritative-meta-output must be paired"
+        )
+    settings = _effective_settings(None)
+    client = LiveNhtsaClient(
+        settings,
+        allow_live=allow_live,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
+        rate_limit_delay_seconds=rate_limit_delay_seconds,
+    )
+    endpoint_names = [
+        item.strip() for item in validation_endpoints.split(",") if item.strip()
+    ]
+    payload = validate_reference_discovery(
+        client=client,
+        reference_database=reference_database,
+        live_manifest=live_manifest,
+        min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        validation_endpoints=endpoint_names,
+        output=output,
+        validated_manifest_output=validated_manifest_output,
+        markdown_output=markdown_output,
+        authoritative_manifest_output=authoritative_manifest_output,
+        authoritative_meta_output=authoritative_meta_output,
+    )
+    console.print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
 
 
 @catalog_app.command("rebuild")

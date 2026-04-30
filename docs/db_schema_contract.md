@@ -16,6 +16,29 @@ The schema must include:
 
 Raw payloads are immutable. Canonical/read-model tables are rebuildable derivatives.
 
+## Discovery Provenance Contract
+
+Schema v1.2 adds a governance layer for full-manifest authority:
+
+- `discovery_runs` records manifest discovery, reference-seed validation, and merge runs.
+- `discovery_manifest_rows` records why each `test_no` was included or excluded, including
+  `seed_source`, live/reference presence, validation status, authority status, and row hash.
+- `discovery_authority_decisions` records the selected discovery authority and supporting
+  counts.
+
+The reference DB may be used only as a discovery seed. A reference-only row must not become
+`authoritative_included` unless an official live discovery-validation endpoint confirms the
+test number and an in-scope parseable `test_date`.
+
+Allowed discovery-validation endpoints are limited to:
+
+- `test_summary`
+- `test_detail`
+- `metadata_export`
+
+This validation is not endpoint matrix detail collect. It must not call vehicle, occupant,
+restraint, intrusion, instrumentation, multimedia, or document detail endpoints.
+
 ## Canonical Duplicate Hardening Rules
 
 - `occupants` represent normalized occupant slots, not raw source observations.

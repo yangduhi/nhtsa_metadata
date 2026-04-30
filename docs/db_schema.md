@@ -24,6 +24,13 @@ Canonical/read-model rows are limited to tests with `test_date >= 2011-01-01`. `
 | `source_field_catalog` | yes | Wildcard-normalized field coverage catalog. | Unique `(endpoint_name, section_name, field_path, observed_type)`. |
 | `source_conflicts` | yes | Provenance conflict registry. | Keeps conflict type, source payload pair, field path, and status. |
 | `canonical_row_sources` | yes | Link from canonical/read-model rows to raw rows. | Unique `(table_name, row_id, source_payload_id, source_row_path, source_row_hash)`. |
+| `discovery_runs` | governance | One manifest discovery/validation/merge operation. | Stores authority, command, manifest hash, date range, row counts, and gates. |
+| `discovery_manifest_rows` | governance | Per-test manifest authority row. | Unique `(discovery_run_id, test_no)` and `(discovery_run_id, row_hash)`; stores live/reference presence and authority status. |
+| `discovery_authority_decisions` | governance | Documented selection of discovery authority. | Stores selected authority, counts, decision status, and reason. |
+
+Discovery tables are an operational/provenance layer. They explain why a `test_no`
+is in the full-scale input manifest; they do not make the reference DB a canonical
+source of truth.
 
 ## Canonical Tables
 
@@ -75,4 +82,5 @@ Full-scale/PostgreSQL index candidates are documented in `docs/phase_reports/sch
 
 ## Migration
 
-The initial Alembic revision is `0001_initial_schema`. No Schema v1.0 finalization migration is required in this phase.
+The initial Alembic revision is `0001_initial_schema`. Schema v1.2 adds
+`0002_discovery_provenance` for discovery authority and manifest lineage tables.

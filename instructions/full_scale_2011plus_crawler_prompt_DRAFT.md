@@ -1,10 +1,27 @@
-﻿# DRAFT: Full-Scale 2011+ Crawler Prompt
+# DRAFT: Full-Scale 2011+ Crawler Prompt
 
-This is a draft prompt only. It is not execution approval.
+This is a draft prompt only. Not execution approval.
+
+## Current Decision
+
+Stage D full-scale collect must not run unless the owner explicitly approves Stage D in the current thread.
+
+Discovery authority has been resolved for the v1.2 full-cover gate:
+
+- selected authority: `reference_seeded_live_validated`
+- authoritative manifest: `data/full_2011plus_authoritative_manifest.csv`
+- manifest meta: `data/full_2011plus_authoritative_manifest.meta.json`
+- authoritative manifest rows: 3891
+- source mix:
+  - `live_by_search`: 3260
+  - `live_year_slice_by_search`: 608
+  - `reference_seed_live_validated`: 23
+- date range: 2011-01-03 to 2025-09-25
+- duplicate/pre-2011/missing-date hard gates: 0
 
 ## Goal
 
-Run the approved full-scale 2011+ NHTSA crash test metadata collection after owner approval.
+Run the approved full-scale 2011+ NHTSA crash test metadata collection only after owner approval and after the discovery authority gate passes.
 
 ## Required Pre-Conditions
 
@@ -12,7 +29,30 @@ Run the approved full-scale 2011+ NHTSA crash test metadata collection after own
 - Working tree has no staged data artifacts.
 - `pytest`, `ruff`, `mypy`, `scripts/verify.ps1`, and `.harness/run.ps1` pass.
 - Live safety negative checks pass.
+- `discovery_authority_decision` is documented.
+- `schema_v1_2_full_cover_gate` is pass.
+- The authoritative manifest path is `data/full_2011plus_authoritative_manifest.csv`.
+- Manifest hash is recorded.
+- Manifest duplicate test_no = 0.
+- Manifest pre-2011 rows = 0.
+- Manifest missing/parse-failed date = 0.
+- Schema contract hard failures = 0.
+- Endpoint matrix hard failures = 0.
+- Source payload immutability and lineage gates pass.
+- Prohibited whole-column `payload_json`/`raw_row_json` indexes are absent.
+- v1.4 classification smoke or post-run classifier gate is planned.
 - Owner explicitly approves full-scale Stage D in the current thread.
+
+## Discovery Authority Gate
+
+The live by-search full manifest alone is not accepted as the full 2011+ universe because it returns only 2011-2021 rows while year-slice by-search returns official 2022-2025 rows.
+
+The selected authority is `reference_seeded_live_validated`:
+
+- First use `full by-search ∪ year-slice by-search` as the official live discovery base.
+- Use the reference DB only as a seed for rows still missing from live discovery.
+- Include reference-seeded rows only when official live validation confirms `test_no` and an in-scope parseable `test_date`.
+- Use live values where validation provides them.
 
 ## Hard Boundaries
 
@@ -28,64 +68,25 @@ Run the approved full-scale 2011+ NHTSA crash test metadata collection after own
 
 Stage A: build manifest only with live safety gate.
 
-Stage B: optional bounded validation if owner requests it.
+Stage B-0: edge-case candidate manifest review only. No live collect, no endpoint detail fetch, no media/file/package parsing.
+
+Stage B-1: approved bounded metadata-only validation. Limit <=100 selected tests, metadata endpoints only, source payload persisted, no file download, no media fetch, no package parsing.
 
 Stage C: verify existing 1000/1500 DB parity without new collection.
 
-Stage D: full 2011+ collect. This requires separate owner approval.
+Stage D: full 2011+ collect. This requires separate owner approval after discovery authority and manifest gates pass.
 
-Stage E: post-run endpoint completeness, schema audit, schema optimization, code_values rebuild, scale report, and API smoke.
+Stage E: post-run endpoint completeness, schema audit, code_values rebuild, v1.4 classification coverage report, and final scale report.
 
-## Required Post-Run Reports
+Stage E required checks:
 
-- full-scale manifest review
-- endpoint completeness report
-- schema audit report
-- schema optimization report
-- code_values rebuild report
-- full-scale final report
+- endpoint completeness
+- schema audit
+- schema optimization
+- code_values rebuild
+- capacity/scale report
+- API smoke
 
 ## Stop Conditions
 
-Stop immediately if any safety gate is bypassed, any file download begins, source payloads fail to persist, pre-2011 canonical rows appear, duplicate groups become non-zero, semantic hard failures appear, or P0/P1 schema/source conflicts appear.
-
-## Schema v1.1 Full-Cover Update (2026-04-30)
-
-This document is still a draft prompt only. It is not execution approval.
-Stage D full collect must not run without separate explicit owner approval.
-
-### v1.1 Manifest-Only Evidence
-
-- live by-search full manifest path: `data/full_2011plus_manifest.csv`
-- observed live by-search manifest rows: 3260
-- observed date range: 2011-01-03 to 2021-12-02
-- duplicate test_no: 0
-- missing/parse-failed date: 0
-- pre-2011 rows: 0
-- anchors included: 7201=True, 10001=True, 10003=True
-
-### v1.1 Contract Gates
-
-- schema contract validator hard failures: 0
-- endpoint matrix validator hard failures: 0
-- instrumentation_detail_info: deferred_optional for metadata-only Stage D unless owner explicitly approves per-curve detail expansion.
-- source payload immutability, lineage, and forbidden whole JSON index policies must remain passing.
-
-### Discovery Authority Decision Required Before Stage D
-
-The v1.1 dry run found a material discovery discrepancy: the live by-search manifest contains 2011-2021 rows, while the existing 1500 actual-crash DB includes 2022-2025 rows. Before Stage D, the owner must choose one discovery authority:
-
-1. live by-search only, accepting the observed 3,260-row universe;
-2. reference-seeded discovery supplement, with a new manifest gate and capacity estimate;
-3. another official NHTSA discovery route, documented before collect.
-
-### Capacity Estimate From Current Live Manifest
-
-- estimated tests: 3260
-- estimated endpoint requests: 55802
-- estimated SQLite DB size: 2185826140 bytes
-- runtime request-delay estimates: see `docs/phase_reports/full_scale_schema_capacity_estimate.md`
-
-### Stage D Stop Conditions Addendum
-
-Stop before detail collect if the manifest contains pre-2011 rows, missing/parse-failed dates, duplicate test_no, unresolved discovery authority discrepancy, schema contract hard failures, endpoint matrix contract hard failures, source_payload immutability failure, lineage failures, or prohibited `payload_json`/`raw_row_json` whole-column indexes.
+Stop immediately if any safety gate is bypassed, any file download begins, source payloads fail to persist, pre-2011 canonical rows appear, duplicate groups become non-zero, discovery authority is unresolved, semantic hard failures appear, or P0/P1 schema/source conflicts appear.

@@ -196,6 +196,91 @@ class SourceConflict(TimestampMixin, Base):
     details_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
 
 
+class DiscoveryRun(TimestampMixin, Base):
+    __tablename__ = "discovery_runs"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    run_kind: Mapped[str] = sa_mapped_column(String(64), nullable=False, index=True)
+    source_authority: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    min_test_date: Mapped[datetime | None] = sa_mapped_column(Date, nullable=True)
+    year_from: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    year_to: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    reference_database_path_hash: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    command_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+    manifest_path: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    manifest_hash: Mapped[str | None] = sa_mapped_column(String(64), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = sa_mapped_column(String(32), default="started", nullable=False)
+    total_rows: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    in_scope_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    out_of_scope_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    duplicate_test_no_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    missing_date_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    parse_failed_date_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    date_range_start: Mapped[datetime | None] = sa_mapped_column(Date, nullable=True)
+    date_range_end: Mapped[datetime | None] = sa_mapped_column(Date, nullable=True)
+    git_commit: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    software_version: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    extra_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class DiscoveryManifestRow(TimestampMixin, Base):
+    __tablename__ = "discovery_manifest_rows"
+    __table_args__ = (
+        UniqueConstraint("discovery_run_id", "test_no"),
+        UniqueConstraint("discovery_run_id", "row_hash"),
+    )
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    discovery_run_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("discovery_runs.id"), nullable=False, index=True
+    )
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    test_date_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    test_date: Mapped[datetime | None] = sa_mapped_column(Date, nullable=True)
+    test_date_parse_status: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    scope_status: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    test_configuration: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    test_configuration_key: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    test_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    model_year: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    vehicle_make: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    vehicle_model: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    seed_source: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    live_by_search_present: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    reference_present: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    live_validation_present: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    validation_status: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    validation_endpoint: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    authority_status: Mapped[str] = sa_mapped_column(String(64), nullable=False, index=True)
+    selection_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    rejection_reason: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    row_hash: Mapped[str] = sa_mapped_column(String(64), nullable=False, index=True)
+    extra_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class DiscoveryAuthorityDecision(TimestampMixin, Base):
+    __tablename__ = "discovery_authority_decisions"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    decision_name: Mapped[str] = sa_mapped_column(String(120), nullable=False, index=True)
+    decision_status: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    selected_authority: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    live_manifest_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    reference_seed_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    reference_only_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    validated_supplement_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    excluded_supplement_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    final_manifest_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    decision_reason: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    decided_at: Mapped[datetime] = sa_mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    git_commit: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    extra_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
 class CanonicalRowSource(TimestampMixin, Base):
     __tablename__ = "canonical_row_sources"
     __table_args__ = (
@@ -526,6 +611,9 @@ __all__ = [
     "CollectionRunItem",
     "CrashTest",
     "DeformationMeasurement",
+    "DiscoveryAuthorityDecision",
+    "DiscoveryManifestRow",
+    "DiscoveryRun",
     "FieldCoverageSnapshot",
     "InstrumentationChannel",
     "InstrumentationChannelDetail",

@@ -19,6 +19,9 @@
 - source_field_catalog: db=True model=True
 - source_conflicts: db=True model=True
 - canonical_row_sources: db=True model=True
+- discovery_runs: db=True model=True
+- discovery_manifest_rows: db=True model=True
+- discovery_authority_decisions: db=True model=True
 - tests: db=True model=True
 - test_participants: db=True model=True
 - vehicles: db=True model=True
@@ -41,6 +44,7 @@
 ## Lineage And Immutability
 - source_payload immutability: True
 - source_payload_observations link: True
+- discovery provenance tables: pass
 
 ## Prohibited Index Policy
 - result: pass

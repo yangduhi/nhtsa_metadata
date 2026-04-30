@@ -22,6 +22,9 @@ from nhtsa_metadata.db.models import (
     CollectionRunItem,
     CrashTest,
     DeformationMeasurement,
+    DiscoveryAuthorityDecision,
+    DiscoveryManifestRow,
+    DiscoveryRun,
     FieldCoverageSnapshot,
     InjuryMetric,
     InstrumentationChannel,
@@ -54,6 +57,9 @@ RAW_TABLES = [
     "source_field_catalog",
     "source_conflicts",
     "canonical_row_sources",
+    "discovery_runs",
+    "discovery_manifest_rows",
+    "discovery_authority_decisions",
 ]
 CANONICAL_TABLES = [
     "tests",
@@ -110,6 +116,10 @@ REQUIRED_UNIQUE_CONSTRAINTS: dict[str, list[tuple[str, ...]]] = {
     "canonical_row_sources": [
         ("table_name", "row_id", "source_payload_id", "source_row_path", "source_row_hash")
     ],
+    "discovery_manifest_rows": [
+        ("discovery_run_id", "test_no"),
+        ("discovery_run_id", "row_hash"),
+    ],
     "tests": [("test_no",)],
     "vehicles": [("test_id", "source_vehicle_no", "source_row_hash")],
     "barriers": [("test_id", "source_row_hash")],
@@ -136,6 +146,14 @@ CRITICAL_INDEXES: dict[str, list[tuple[str, ...]]] = {
     "tests": [("test_no",)],
     "source_payloads": [("test_no",), ("endpoint_name",), ("payload_hash",)],
     "source_payload_observations": [("source_payload_id",)],
+    "discovery_runs": [("run_kind",), ("manifest_hash",)],
+    "discovery_manifest_rows": [
+        ("discovery_run_id",),
+        ("test_no",),
+        ("authority_status",),
+        ("row_hash",),
+    ],
+    "discovery_authority_decisions": [("decision_name",)],
     "instrumentation_channels": [("test_id",), ("test_no",)],
     "media_assets": [("test_id",)],
     "test_filter_summary": [("test_no",)],
@@ -335,6 +353,26 @@ class SchemaContractValidator:
                 ("endpoint_name", "canonical_url_hash", "payload_hash"),
             ),
             "source_payload_observation_policy": payload_observation,
+            "discovery_provenance_policy": {
+                "tables": [
+                    "discovery_runs",
+                    "discovery_manifest_rows",
+                    "discovery_authority_decisions",
+                ],
+                "result": "pass"
+                if all(
+                    table in db_tables
+                    for table in (
+                        "discovery_runs",
+                        "discovery_manifest_rows",
+                        "discovery_authority_decisions",
+                    )
+                )
+                else "fail",
+                "purpose": (
+                    "operational authority and manifest lineage; not canonical source of truth"
+                ),
+            },
             "code_values_policy": {
                 "decision": "derived_registry_not_source_of_truth",
                 "table_exists": "code_values" in db_tables,
@@ -383,6 +421,8 @@ class SchemaContractValidator:
                 f"{payload['source_payload_immutability']['passed']}",
                 f"- source_payload_observations link: "
                 f"{payload['source_payload_observation_policy']['links_to_source_payloads']}",
+                f"- discovery provenance tables: "
+                f"{payload['discovery_provenance_policy']['result']}",
                 "",
                 "## Prohibited Index Policy",
                 f"- result: {payload['prohibited_index_policy']['result']}",
@@ -910,7 +950,7 @@ class FullScaleCapacityEstimator:
                     "delay_seconds": delay,
                     "request_delay_hours": round(total_requests * delay / 3600, 2),
                 }
-                for delay in (0.1, 0.25, 0.5, 1.0)
+                for delay in (0.1, 0.2, 0.5, 1.0)
             ],
             "bottleneck_tables": _bottleneck_tables(estimated_tables),
         }
@@ -1275,6 +1315,9 @@ def _table_counts(session: Session) -> dict[str, int]:
         SourcePayloadSection,
         SourceFieldCatalog,
         SourceConflict,
+        DiscoveryRun,
+        DiscoveryManifestRow,
+        DiscoveryAuthorityDecision,
         CanonicalRowSource,
         CrashTest,
         TestParticipant,
