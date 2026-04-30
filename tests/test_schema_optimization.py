@@ -31,6 +31,14 @@ def test_schema_optimization_reports_field_profiles(tmp_settings) -> None:  # ty
     assert payload["summary"]["field_profiles"] > 0
     assert payload["run"]["test_count"] == 1
     assert "recommendations" in payload
+    assert "source_conflict_taxonomy" in payload
+    assert "data_package_invariant" in payload
+    assert "test_facet_coverage" in payload
+    assert not any(
+        profile["recommendation_class"] == "dictionary_candidate"
+        and str(profile["field_path"]).endswith(".curveNo")
+        for profile in payload["field_profiles"]
+    )
     assert any(
         "[*]" in profile["field_path"]
         for profile in payload["field_profiles"]

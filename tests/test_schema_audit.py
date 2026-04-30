@@ -39,6 +39,7 @@ def test_schema_audit_reports_no_fixture_canonical_duplicates(tmp_settings) -> N
         if isinstance(row["field_path"], str)
     )
     assert report["asset_classification_audit"]["classified_data_packages"] >= 4
+    assert report["asset_classification_audit"]["counting_invariant_status"] == "pass"
     assert "baseline_semantic_cardinality" in report
     assert report["scope"]["min_test_date"] == "2011-01-01"
     assert report["scope"]["out_of_scope_tests"] == 0

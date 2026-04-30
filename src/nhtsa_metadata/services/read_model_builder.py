@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -9,8 +10,14 @@ from sqlalchemy.orm import Session
 from nhtsa_metadata.config import get_settings
 from nhtsa_metadata.db.models import (
     AssetSummary,
+    Barrier,
     CrashTest,
+    DeformationMeasurement,
+    InjuryMetric,
+    InstrumentationChannel,
     MediaAsset,
+    Occupant,
+    Restraint,
     TestClassification,
     TestFacet,
     TestFilterSummary,
@@ -50,7 +57,7 @@ class ReadModelBuilder:
         impact_angle = float(test.impact_angle) if test.impact_angle is not None else None
         impact_direction = _impact_direction(impact_angle)
         counterparty_kind = _counterparty_kind(participants)
-        test_family = _test_family(impact_direction, counterparty_kind)
+        test_family = _test_family(test, impact_direction, counterparty_kind)
         self.session.add(
             TestFilterSummary(
                 test_id=test.id,
@@ -120,9 +127,74 @@ class ReadModelBuilder:
                 _add(facet_counts, "asset_kind", value)
             if summary.has_uds_or_tdms_package:
                 _add(facet_counts, "data_package_subtype", "UDS_OR_TDMS")
+        self._add_grouped_facets(
+            facet_counts,
+            TestClassification.source_test_configuration_key,
+            "test_configuration_key",
+        )
+        self._add_grouped_facets(facet_counts, TestClassification.test_family, "test_family")
+        self._add_grouped_facets(
+            facet_counts,
+            TestClassification.classification_status,
+            "classification_status",
+        )
+        self._add_grouped_facets(facet_counts, Vehicle.model_year, "model_year")
+        self._add_grouped_facets(facet_counts, Barrier.rigidity, "barrier_rigidity")
+        self._add_grouped_facets(facet_counts, Barrier.shape, "barrier_shape")
+        self._add_grouped_facets(
+            facet_counts,
+            Occupant.occupant_location_normalized,
+            "occupant_location",
+        )
+        self._add_grouped_facets(facet_counts, Occupant.occupant_type, "occupant_type")
+        self._add_grouped_facets(facet_counts, Occupant.dummy_type, "dummy_type")
+        self._add_grouped_facets(facet_counts, Restraint.restraint_type, "restraint_type")
+        self._add_grouped_facets(facet_counts, Restraint.deployment_status, "restraint_deployment")
+        self._add_grouped_facets(facet_counts, InstrumentationChannel.sensor_type, "sensor_type")
+        self._add_grouped_facets(
+            facet_counts,
+            InstrumentationChannel.sensor_location,
+            "sensor_location",
+        )
+        self._add_grouped_facets(
+            facet_counts,
+            InstrumentationChannel.sensor_attachment,
+            "sensor_attachment",
+        )
+        self._add_grouped_facets(facet_counts, InstrumentationChannel.sensor_axis, "sensor_axis")
+        self._add_grouped_facets(facet_counts, InstrumentationChannel.unit_raw, "sensor_unit")
+        self._add_grouped_facets(
+            facet_counts,
+            InstrumentationChannel.channel_status,
+            "channel_status",
+        )
+        self._add_grouped_facets(facet_counts, InstrumentationChannel.data_status, "data_status")
+        self._add_grouped_facets(facet_counts, InjuryMetric.metric_code, "injury_metric_code")
+        self._add_grouped_facets(
+            facet_counts,
+            DeformationMeasurement.measurement_code,
+            "deformation_code",
+        )
+        self._add_grouped_facets(facet_counts, MediaAsset.asset_subtype, "asset_subtype")
         for (name, value), count in facet_counts.items():
             self.session.add(TestFacet(facet_name=name, facet_value=value, test_count=count))
         self.session.flush()
+
+    def _add_grouped_facets(
+        self,
+        facet_counts: dict[tuple[str, str], int],
+        column: Any,
+        facet_name: str,
+    ) -> None:
+        model = column.class_
+        statement = (
+            select(column, func.count(func.distinct(model.test_id)))
+            .where(column.is_not(None))
+            .group_by(column)
+        )
+        for value, count in self.session.execute(statement):
+            if value not in (None, ""):
+                facet_counts[(facet_name, str(value))] = int(count)
 
 
 def _add(counts: dict[tuple[str, str], int], name: str, value: str | None) -> None:
@@ -167,7 +239,43 @@ def _counterparty_kind(participants: list[TestParticipant]) -> str:
     return "unknown"
 
 
-def _test_family(impact_direction: str, counterparty_kind: str) -> str:
+def _test_family(
+    test: CrashTest, impact_direction: str, counterparty_kind: str
+) -> str:
+    text = " ".join(
+        value.upper()
+        for value in (
+            test.test_configuration_key,
+            test.test_configuration,
+            test.test_type,
+            test.contractor_study_title,
+        )
+        if value
+    )
+    if "FORWARD COLLISION WARNING" in text or " FCW" in text:
+        return "adas_fcw"
+    if "LANE DEPARTURE WARNING" in text or " LDW" in text:
+        return "adas_ldw"
+    if "TRAFFIC JAM ASSIST" in text:
+        return "adas_other"
+    if "PEDESTRIAN" in text:
+        return "pedestrian"
+    if "LOW RISK DEPLOYMENT" in text:
+        return "low_risk_deployment"
+    if "SLED WITH VEHICLE BODY" in text:
+        return "sled_with_body"
+    if "SLED WITHOUT VEHICLE BODY" in text:
+        return "sled_without_body"
+    if "STATIC AIR BAG TEST SIDE" in text or "OUT OF POSITION" in text:
+        return "static_airbag"
+    if "ROLLOVER" in text:
+        return "rollover"
+    if "FMVSS 213" in text or "CHILD RESTRAINT" in text:
+        return "child_restraint"
+    if "CALIBRATION" in text:
+        return "calibration"
+    if "RESEARCH" in text:
+        return "research_other"
     if impact_direction == "frontal" and counterparty_kind == "barrier":
         return "frontal_barrier"
     if impact_direction == "side" and counterparty_kind == "impactor_vehicle":

@@ -18,6 +18,11 @@ from nhtsa_metadata.db.session import (
 )
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.endpoint_completeness import (
+    EndpointBackfillService,
+    EndpointCompletenessService,
+    write_json,
+)
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
 from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
@@ -188,6 +193,38 @@ def catalog_rebuild(
     )
 
 
+@catalog_app.command("backfill-endpoints")
+def catalog_backfill_endpoints(
+    manifest: Annotated[Path, typer.Option("--manifest")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    source: Annotated[str, typer.Option("--source")] = "live",
+    allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
+    endpoints: Annotated[str, typer.Option("--endpoints")] = "intrusion_info",
+    scope: Annotated[str, typer.Option("--scope")] = "existing-manifest",
+    only_missing: Annotated[bool, typer.Option("--only-missing")] = False,
+    min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+) -> None:
+    endpoint_names = [item.strip() for item in endpoints.split(",") if item.strip()]
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
+    with session_factory() as session:
+        result = EndpointBackfillService(
+            session,
+            manifest=manifest,
+            source=source,
+            allow_live=allow_live,
+            settings=settings,
+            min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        ).backfill(endpoints=endpoint_names, scope=scope, only_missing=only_missing)
+    payload = result.__dict__
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    console.print(encoded)
+
+
 @catalog_app.command("assert-live-baseline")
 def catalog_assert_live_baseline(
     database_url: Annotated[str | None, typer.Option("--database-url")] = None,
@@ -249,6 +286,27 @@ def schema_audit(
     console.print(encoded)
     if _schema_audit_has_scope_hard_failures(payload):
         raise typer.Exit(1)
+
+
+@schema_app.command("endpoint-completeness")
+def schema_endpoint_completeness(
+    manifest: Annotated[Path, typer.Option("--manifest")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+) -> None:
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
+    with session_factory() as session:
+        payload = EndpointCompletenessService(
+            session,
+            manifest=manifest,
+            min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        ).report()
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_json(output, payload)
+    console.print(encoded)
 
 
 @schema_app.command("optimize-analyze")

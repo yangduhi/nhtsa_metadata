@@ -760,14 +760,18 @@ def _asset_classification_audit(
         payload for payload in payloads if payload.endpoint_name == "multimedia_files"
     ]
     candidates = _data_package_candidates(vehicle_document_payloads)
-    classified_urls = {
-        asset.source_url for asset in assets if asset.asset_kind == "data_package"
+    candidate_urls = {
+        str(candidate["url"])
+        for candidate in candidates
+        if isinstance(candidate.get("url"), str)
     }
+    classified_urls = {asset.source_url for asset in assets if asset.asset_kind == "data_package"}
     unclassified = [
         candidate
         for candidate in candidates
-        if isinstance(candidate.get("url"), str) and candidate["url"] not in classified_urls
+        if isinstance(candidate.get("url"), str) and str(candidate["url"]) not in classified_urls
     ]
+    classified_non_candidate = sorted(classified_urls - candidate_urls)
     return {
         "vehicle_documents_payloads": len(vehicle_document_payloads),
         "multimedia_files_payloads": len(multimedia_payloads),
@@ -778,7 +782,17 @@ def _asset_classification_audit(
         "classified_data_packages": sum(
             1 for asset in assets if asset.asset_kind == "data_package"
         ),
+        "candidate_count_definition": (
+            "vehicle_documents rows whose URL/content is inferred as data_package"
+        ),
+        "classified_count_definition": "media_assets rows with asset_kind=data_package",
+        "data_package_candidate_assets": len(candidate_urls),
+        "classified_data_package_assets": len(classified_urls),
+        "classified_non_candidate_assets": len(classified_non_candidate),
+        "candidate_unclassified_count": len(unclassified),
+        "counting_invariant_status": "pass" if not unclassified else "fail",
         "unclassified_asset_candidates": unclassified[:50],
+        "classified_non_candidate_asset_samples": classified_non_candidate[:50],
         "media_asset_subtypes": _counter_rows(asset.asset_subtype for asset in assets),
         "has_uds_or_tdms_package_tests": _has_uds_or_tdms_package_tests(
             assets, test_no_by_id

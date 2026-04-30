@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from nhtsa_metadata.config import Settings, get_settings, sanitize_database_url
 from nhtsa_metadata.db.models import CollectionRun, CollectionRunItem, CrashTest
+from nhtsa_metadata.services.collection_runs import mark_stale_started_runs
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.scope import evaluate_scope_from_fetch_results
 from nhtsa_metadata.sources.nhtsa_crash.client import LiveAccessNotAllowedError
@@ -60,6 +61,8 @@ class CatalogBuilder:
         return self.collect_tests(test_numbers)
 
     def collect_tests(self, test_numbers: list[int]) -> CollectResult:
+        mark_stale_started_runs(self.session, "closed before catalog collect resume")
+        self.session.commit()
         run = CollectionRun(
             run_uuid=str(uuid4()),
             source="nhtsa_crash",

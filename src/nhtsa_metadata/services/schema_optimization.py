@@ -37,7 +37,9 @@ from nhtsa_metadata.db.models import (
     TestParticipant,
     Vehicle,
 )
+from nhtsa_metadata.sources.nhtsa_crash.field_aliases import FIELD_ALIASES
 from nhtsa_metadata.sources.nhtsa_crash.field_catalog import normalize_field_path
+from nhtsa_metadata.sources.nhtsa_crash.normalization import infer_asset_kind
 
 FIELD_PROFILE_LIMIT = 5000
 RECOMMENDATION_LIMIT = 500
@@ -84,10 +86,15 @@ class SchemaOptimizationService:
             field_profiles, table_growth, include_index_candidates
         )
         endpoint_coverage = self._endpoint_coverage()
+        conflict_taxonomy = self._conflict_taxonomy()
+        dictionary_domain_report = self._dictionary_domain_report(field_profiles)
+        data_package_invariant = self._data_package_invariant()
+        facet_coverage = self._facet_coverage()
         no_action = [
             profile
             for profile in field_profiles
-            if profile["recommendation_class"] == "raw_only_no_action"
+            if profile["recommendation_class"]
+            in {"raw_only_no_action", "identifier_no_action"}
         ][:RECOMMENDATION_LIMIT]
         manual_review = [
             profile
@@ -113,6 +120,10 @@ class SchemaOptimizationService:
             "table_growth": table_growth,
             "field_profiles": field_profiles[:FIELD_PROFILE_LIMIT],
             "recommendations": recommendations[:RECOMMENDATION_LIMIT],
+            "dictionary_domain_report": dictionary_domain_report,
+            "source_conflict_taxonomy": conflict_taxonomy,
+            "data_package_invariant": data_package_invariant,
+            "test_facet_coverage": facet_coverage,
             "manual_review_items": manual_review,
             "no_action_raw_only": no_action,
         }
@@ -123,6 +134,9 @@ class SchemaOptimizationService:
         table_growth = payload["table_growth"]
         recommendations = payload["recommendations"]
         no_action = payload["no_action_raw_only"]
+        conflict_summary = payload["source_conflict_taxonomy"]["summary"]
+        data_package = payload["data_package_invariant"]
+        facet_coverage = payload["test_facet_coverage"]
         top_unmapped = [
             profile
             for profile in payload["field_profiles"]
@@ -175,10 +189,33 @@ class SchemaOptimizationService:
                 f"{summary['p3_recommendations']}",
                 f"- column candidates: {summary['column_candidates']}",
                 f"- dictionary candidates: {summary['dictionary_candidates']}",
+                f"- code values candidates: {summary['code_values_candidates']}",
                 f"- facet candidates: {summary['facet_candidates']}",
                 f"- index candidates: {summary['index_candidates']}",
                 f"- alias map candidates: {summary['alias_map_candidates']}",
                 f"- semantic key candidates: {summary['semantic_key_candidates']}",
+                f"- identifier no-action fields: {summary['identifier_no_action_fields']}",
+                f"- numeric measurement column candidates: "
+                f"{summary['numeric_measurement_column_candidates']}",
+                "",
+                "## Source Conflict Taxonomy",
+                f"- total conflicts: {conflict_summary['total_conflicts']}",
+                f"- P0/P1/P2/P3: {conflict_summary['p0']}/{conflict_summary['p1']}/"
+                f"{conflict_summary['p2']}/{conflict_summary['p3']}",
+                f"- by class: {conflict_summary['by_class']}",
+                "",
+                "## Data Package Invariant",
+                f"- candidate assets: {data_package['data_package_candidate_assets']}",
+                f"- classified assets: {data_package['classified_data_package_assets']}",
+                f"- classified non-candidate assets: "
+                f"{data_package['classified_non_candidate_assets']}",
+                f"- candidate unclassified count: {data_package['candidate_unclassified_count']}",
+                f"- status: {data_package['counting_invariant_status']}",
+                "",
+                "## Test Facet Coverage",
+                f"- required facets: {len(facet_coverage['required_facets'])}",
+                f"- present facets: {len(facet_coverage['present_required_facets'])}",
+                f"- missing facets: {facet_coverage['missing_required_facets']}",
                 "",
                 "## Proposed Schema Optimization Backlog",
             ]
@@ -250,7 +287,14 @@ class SchemaOptimizationService:
             distinct_count = len(example_values)
             distinct_ratio = distinct_count / non_null_count if non_null_count else 0.0
             mapped = next((item for item in items if item.mapped_table or item.mapped_column), None)
-            mapping_status = _mapping_status(items, mapped)
+            alias_target = _alias_target(section_name, field_path)
+            mapping_status = _mapping_status(items, mapped, alias_target)
+            mapped_table = mapped.mapped_table if mapped else (
+                alias_target[0] if alias_target else None
+            )
+            mapped_column = mapped.mapped_column if mapped else (
+                alias_target[1] if alias_target else None
+            )
             recommendation_class, priority, reason = _classify_field(
                 endpoint_name=endpoint_name,
                 field_path=field_path,
@@ -274,8 +318,8 @@ class SchemaOptimizationService:
                     "section_name": section_name,
                     "field_path": field_path,
                     "mapping_status": mapping_status,
-                    "mapped_table": mapped.mapped_table if mapped else None,
-                    "mapped_column": mapped.mapped_column if mapped else None,
+                    "mapped_table": mapped_table,
+                    "mapped_column": mapped_column,
                     "observed_payload_count": seen_count,
                     "observed_test_count": observed_test_count,
                     "non_null_count": non_null_count,
@@ -408,13 +452,166 @@ class SchemaOptimizationService:
             for table_name, model in tables.items()
         ]
 
+    def _conflict_taxonomy(self) -> dict[str, Any]:
+        payload_by_id = {
+            payload.id: payload
+            for payload in self.session.scalars(select(SourcePayload))
+        }
+        items: list[dict[str, Any]] = []
+        for conflict in self.session.scalars(select(SourceConflict).order_by(SourceConflict.id)):
+            details = conflict.details_json or {}
+            value_a = details.get("existing_value")
+            value_b = details.get("incoming_value")
+            conflict_class, policy, priority = _classify_conflict(
+                conflict.field_path, value_a, value_b
+            )
+            payload_a = payload_by_id.get(conflict.source_payload_id_a or -1)
+            payload_b = payload_by_id.get(conflict.source_payload_id_b or -1)
+            items.append(
+                {
+                    "field_semantic_key": conflict.field_path,
+                    "test_no": conflict.test_no,
+                    "endpoint_a": (
+                        payload_a.endpoint_name
+                        if payload_a
+                        else details.get("existing_endpoint")
+                    ),
+                    "endpoint_b": (
+                        payload_b.endpoint_name
+                        if payload_b
+                        else details.get("incoming_endpoint")
+                    ),
+                    "value_a_sample": _sample_value(value_a),
+                    "value_b_sample": _sample_value(value_b),
+                    "conflict_class": conflict_class,
+                    "resolution_policy": policy,
+                    "priority": priority,
+                }
+            )
+        by_class = Counter(str(item["conflict_class"]) for item in items)
+        by_priority = Counter(str(item["priority"]) for item in items)
+        return {
+            "summary": {
+                "total_conflicts": len(items),
+                "by_class": dict(sorted(by_class.items())),
+                "p0": by_priority["P0"],
+                "p1": by_priority["P1"],
+                "p2": by_priority["P2"],
+                "p3": by_priority["P3"],
+            },
+            "items": items[:RECOMMENDATION_LIMIT],
+        }
+
+    def _dictionary_domain_report(
+        self, field_profiles: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "code_system": _code_system(profile),
+                "endpoint_name": profile["endpoint_name"],
+                "field_path": profile["field_path"],
+                "observed_test_count": profile["observed_test_count"],
+                "distinct_count": profile["distinct_count"],
+                "example_values": profile["example_values"],
+                "status": "candidate",
+            }
+            for profile in field_profiles
+            if profile["recommendation_class"] == "code_values_candidate"
+        ][:RECOMMENDATION_LIMIT]
+
+    def _data_package_invariant(self) -> dict[str, Any]:
+        candidate_urls: set[str] = set()
+        for payload in self.session.scalars(
+            select(SourcePayload).where(SourcePayload.endpoint_name == "vehicle_documents")
+        ):
+            for row in _payload_rows(payload.payload_json):
+                url = _first_value(row, "url", "URL", "downloadUrl", "fileUrl")
+                document_type = _first_value(row, "documentType", "type")
+                normalized_type = None if document_type is None else str(document_type)
+                if (
+                    url
+                    and infer_asset_kind(str(url), normalized_type) == "data_package"
+                ):
+                    candidate_urls.add(str(url))
+                for key in ("udsFiles", "evFiles", "abfFiles", "isoFiles", "tdmsFiles"):
+                    value = row.get(key)
+                    if value:
+                        candidate_urls.add(str(value))
+        classified_urls = {
+            asset.source_url
+            for asset in self.session.scalars(select(MediaAsset))
+            if asset.asset_kind == "data_package"
+        }
+        unclassified = sorted(candidate_urls - classified_urls)
+        classified_non_candidate = sorted(classified_urls - candidate_urls)
+        return {
+            "candidate_count_definition": (
+                "vehicle_documents rows or package fields inferred as data_package"
+            ),
+            "classified_count_definition": "media_assets rows with asset_kind=data_package",
+            "data_package_candidate_assets": len(candidate_urls),
+            "classified_data_package_assets": len(classified_urls),
+            "classified_non_candidate_assets": len(classified_non_candidate),
+            "candidate_unclassified_count": len(unclassified),
+            "counting_invariant_status": "pass" if not unclassified else "fail",
+            "unclassified_asset_candidate_samples": unclassified[:50],
+            "classified_non_candidate_asset_samples": classified_non_candidate[:50],
+        }
+
+    def _facet_coverage(self) -> dict[str, Any]:
+        required = [
+            "test_type",
+            "test_configuration",
+            "test_configuration_key",
+            "test_family",
+            "classification_status",
+            "vehicle_make",
+            "vehicle_model",
+            "model_year",
+            "participant_kind",
+            "barrier_rigidity",
+            "barrier_shape",
+            "occupant_location",
+            "dummy_type",
+            "restraint_type",
+            "restraint_deployment",
+            "sensor_type",
+            "sensor_location",
+            "sensor_attachment",
+            "sensor_axis",
+            "sensor_unit",
+            "channel_status",
+            "data_status",
+            "injury_metric_code",
+            "deformation_code",
+            "asset_kind",
+            "asset_subtype",
+            "data_package_subtype",
+        ]
+        present = {
+            value
+            for value in self.session.scalars(select(TestFacet.facet_name).distinct())
+        }
+        return {
+            "required_facets": required,
+            "present_required_facets": sorted(set(required) & present),
+            "missing_required_facets": sorted(set(required) - present),
+            "facet_row_count": self._count(TestFacet),
+        }
+
     def _count(self, model: type[Any]) -> int:
         return int(self.session.scalar(select(func.count()).select_from(model)) or 0)
 
 
-def _mapping_status(items: list[SourceFieldCatalog], mapped: SourceFieldCatalog | None) -> str:
+def _mapping_status(
+    items: list[SourceFieldCatalog],
+    mapped: SourceFieldCatalog | None,
+    alias_target: tuple[str, str] | None = None,
+) -> str:
     if mapped is not None:
         return "mapped"
+    if alias_target is not None:
+        return "extra_json" if alias_target[1] == "extra_json" else "mapped"
     statuses = {item.mapping_status for item in items}
     if "extra_json" in statuses:
         return "extra_json"
@@ -446,6 +643,19 @@ def _sample_value(value: Any) -> Any:
     return str(value)[:120]
 
 
+def _alias_target(
+    section_name: str | None, field_path: str
+) -> tuple[str, str] | None:
+    if section_name is None:
+        return None
+    field_name = _field_name(field_path)
+    return FIELD_ALIASES.get(f"{section_name}.{field_name}")
+
+
+def _field_name(field_path: str) -> str:
+    return field_path.rsplit(".", 1)[-1]
+
+
 def _classify_field(
     *,
     endpoint_name: str,
@@ -468,6 +678,12 @@ def _classify_field(
         return "semantic_key_candidate", "P0", "conflict touches scope or semantic identity"
     if mapping_status == "mapped":
         return "raw_only_no_action", "P3", "already mapped"
+    if mapping_status == "extra_json":
+        return "raw_only_no_action", "P3", "extra_json commentary/link field"
+    if _is_identifier_field(field_path):
+        return "identifier_no_action", "P3", "identifier fields stay raw/canonical, not dictionary"
+    if _is_raw_link_or_commentary_field(field_path):
+        return "raw_only_no_action", "P3", "URL/link/commentary fields stay raw metadata"
     support_ok = observed_test_count >= min_test_support or (
         total_tests > 0 and observed_test_count / total_tests >= 0.10
     )
@@ -477,6 +693,14 @@ def _classify_field(
     if conflict_observed:
         return "conflict_resolution_candidate", "P1", "source conflict observed"
     if support_ok and non_null_ok and stable and include_column_candidates:
+        if _is_numeric_measurement_field(field_path):
+            return (
+                "numeric_measurement_column_candidate",
+                "P2",
+                "numeric measurement field should not be treated as dictionary",
+            )
+        if dictionary_like and _is_dictionary_domain_field(field_path):
+            return "code_values_candidate", "P2", "stable low-cardinality domain field"
         if dictionary_like:
             return "dictionary_candidate", "P2", "stable low-cardinality repeated field"
         if include_facet_candidates and _is_facet_like(field_path):
@@ -521,12 +745,141 @@ def _is_engineering_endpoint(endpoint_name: str) -> bool:
     return any(token in lowered for token in ENGINEERING_ENDPOINT_TOKENS)
 
 
+def _is_identifier_field(field_path: str) -> bool:
+    lowered = _field_name(field_path).lower()
+    return lowered in {
+        "testno",
+        "vehicleno",
+        "curveno",
+        "tstref",
+        "testreferenceno",
+        "id",
+        "rowid",
+        "url",
+        "hash",
+        "path",
+    } or lowered.endswith(("url", "hash", "path", "id"))
+
+
+def _is_raw_link_or_commentary_field(field_path: str) -> bool:
+    lowered = _field_name(field_path).lower()
+    tokens = (
+        "files",
+        "photos",
+        "videos",
+        "reports",
+        "url",
+        "information",
+        "commentary",
+    )
+    return any(token in lowered for token in tokens)
+
+
+def _is_numeric_measurement_field(field_path: str) -> bool:
+    lowered = _field_name(field_path).lower()
+    tokens = (
+        "numberoffirstpoint",
+        "numberoflastpoint",
+        "timeincrement",
+        "speed",
+        "weight",
+        "length",
+        "width",
+        "height",
+        "hic",
+        "criterion",
+        "interval",
+        "femur",
+        "load",
+        "metric",
+        "value",
+        "angle",
+        "distance",
+    )
+    return any(token in lowered for token in tokens)
+
+
+def _is_dictionary_domain_field(field_path: str) -> bool:
+    lowered = _field_name(field_path).lower()
+    tokens = (
+        "sensortype",
+        "sensorattachment",
+        "axisdirofsensor",
+        "datameasurementunits",
+        "datastatus",
+        "channelstatus",
+        "occupantlocation",
+        "occupanttype",
+        "restrainttype",
+        "deployment",
+        "barrierrigidity",
+        "rigidor deformablebarrier",
+        "barriershape",
+        "assetkind",
+        "assetsubtype",
+        "testconfigurationkey",
+        "classificationstatus",
+        "participantkind",
+    )
+    return any(token in lowered for token in tokens)
+
+
 def _is_facet_like(field_path: str) -> bool:
     lowered = field_path.lower()
     return any(
         token in lowered
         for token in ("make", "model", "year", "type", "configuration", "dummy", "position")
     )
+
+
+def _classify_conflict(
+    field_path: str | None, value_a: Any, value_b: Any
+) -> tuple[str, str, str]:
+    lowered = (field_path or "").lower()
+    if any(token in lowered for token in ("test_no", "test_date", "scope")):
+        return "semantic_conflict", "manual resolution required for identity/scope", "P0"
+    if _numeric_equal(value_a, value_b):
+        return "numeric_rounding_difference", "numeric-equivalent source values", "P3"
+    if "occupant_location" in lowered:
+        return "benign_alias_difference", "location code and display label are equivalent", "P3"
+    if "vehicle_speed" in lowered or "vehicle_test_weight" in lowered:
+        return (
+            "unit_representation_difference",
+            "canonical numeric value retains comparable magnitude",
+            "P3",
+        )
+    if any(token in lowered for token in ("test_type", "configuration", "make", "model")):
+        return (
+            "canonical_resolution_needed",
+            "user-facing filter value conflict needs precedence policy",
+            "P1",
+        )
+    return "requires_manual_review", "manual review required", "P2"
+
+
+def _numeric_equal(value_a: Any, value_b: Any) -> bool:
+    try:
+        return float(str(value_a).strip()) == float(str(value_b).strip())
+    except (TypeError, ValueError):
+        return False
+
+
+def _payload_rows(payload_json: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = payload_json.get("results")
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _first_value(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row:
+            return row[key]
+    return None
+
+
+def _code_system(profile: dict[str, Any]) -> str:
+    return f"{profile['endpoint_name']}:{_field_name(str(profile['field_path']))}"
 
 
 def _summary(
@@ -543,9 +896,14 @@ def _summary(
         "column_candidates": class_counter["column_candidate"],
         "facet_candidates": class_counter["facet_candidate"],
         "dictionary_candidates": class_counter["dictionary_candidate"],
+        "code_values_candidates": class_counter["code_values_candidate"],
         "index_candidates": class_counter["index_candidate"],
         "semantic_key_candidates": class_counter["semantic_key_candidate"],
         "alias_map_candidates": class_counter["alias_map_candidate"],
+        "identifier_no_action_fields": class_counter["identifier_no_action"],
+        "numeric_measurement_column_candidates": class_counter[
+            "numeric_measurement_column_candidate"
+        ],
         "p0_recommendations": priority_counter["P0"],
         "p1_recommendations": priority_counter["P1"],
         "p2_recommendations": priority_counter["P2"],
