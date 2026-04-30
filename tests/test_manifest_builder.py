@@ -16,10 +16,12 @@ from nhtsa_metadata.sources.nhtsa_crash.contracts import SourceFetchResult, Sour
 class FakeDiscoveryClient:
     def __init__(self) -> None:
         self.discovery_calls: list[dict[str, object]] = []
+        self.summary_calls: list[int] = []
 
     def fetch(self, endpoint_name: str, **path_and_query: object) -> SourceFetchResult:
         if endpoint_name == "test_summary":
             test_no = int(path_and_query["test_no"])
+            self.summary_calls.append(test_no)
             if test_no == 7201:
                 row = {
                     "testNo": 7201,
@@ -294,6 +296,31 @@ def test_actual_crash_manifest_excludes_existing_and_non_crash(tmp_path: Path) -
     assert report.excluded_test_numbers == 3
     assert [int(row["test_no"]) for row in rows] == [20002]
     assert rows[0]["test_configuration"] == "IMPACTOR INTO VEHICLE"
+
+
+def test_full_scope_manifest_uses_search_only_and_no_limit_gate(tmp_path: Path) -> None:
+    client = FakeDiscoveryClient()
+    output = tmp_path / "full_manifest.csv"
+
+    report = StratifiedManifestBuilder(client).build(
+        output=output,
+        limit=40,
+        max_discovery_pages=1,
+        discovery_page_size=10,
+        full_scope=True,
+        manifest_only=True,
+        include_required_baselines=False,
+    )
+
+    with output.open("r", encoding="utf-8", newline="") as file:
+        rows = list(csv.DictReader(file))
+    assert report.full_scope is True
+    assert report.manifest_only is True
+    assert report.limit is None
+    assert client.summary_calls == []
+    assert {int(row["test_no"]) for row in rows} == {10001, 10003, 20002, 20003}
+    assert all(row["scope_status"] == "in_scope" for row in rows)
+    assert all(row["balance_status"] == "full_scope" for row in rows)
 
 
 def test_cli_build_manifest_requires_allow_live(tmp_path: Path) -> None:

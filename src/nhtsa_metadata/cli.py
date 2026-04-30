@@ -24,6 +24,18 @@ from nhtsa_metadata.services.endpoint_completeness import (
     EndpointCompletenessService,
     write_json,
 )
+from nhtsa_metadata.services.full_cover_readiness import (
+    EndpointMatrixContractValidator,
+    FullCoverageGapService,
+    FullScaleCapacityEstimator,
+    SchemaContractValidator,
+    manual_domain_review_backlog,
+    manual_domain_review_markdown,
+    write_edge_case_manifest,
+)
+from nhtsa_metadata.services.full_cover_readiness import (
+    write_json as write_full_cover_json,
+)
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
 from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
@@ -154,6 +166,11 @@ def catalog_build_manifest(
         bool, typer.Option("--include-required-baselines/--no-include-required-baselines")
     ] = True,
     actual_crash_only: Annotated[bool, typer.Option("--actual-crash-only")] = False,
+    full_scope: Annotated[bool, typer.Option("--full-scope")] = False,
+    manifest_only: Annotated[bool, typer.Option("--manifest-only")] = False,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
     exclude_manifest: Annotated[
         list[Path] | None, typer.Option("--exclude-manifest")
     ] = None,
@@ -164,7 +181,11 @@ def catalog_build_manifest(
     if not allow_live:
         raise LiveAccessNotAllowedError("--source live requires --allow-live")
     settings = _effective_settings(None)
-    client = LiveNhtsaClient(settings, allow_live=allow_live)
+    client = LiveNhtsaClient(
+        settings,
+        allow_live=allow_live,
+        rate_limit_delay_seconds=rate_limit_delay_seconds,
+    )
     report = StratifiedManifestBuilder(client).build(
         output=output,
         limit=limit,
@@ -179,6 +200,8 @@ def catalog_build_manifest(
         relax_balance=relax_balance,
         include_required_baselines=include_required_baselines,
         actual_crash_only=actual_crash_only,
+        full_scope=full_scope,
+        manifest_only=manifest_only,
         exclude_manifests=exclude_manifest or [],
         reference_database=reference_database
         or (Path(settings.reference_database_path) if settings.reference_database_path else None),
@@ -399,6 +422,113 @@ def schema_backlog_triage(
     if summary_output is not None:
         summary_output.parent.mkdir(parents=True, exist_ok=True)
         summary_output.write_text(_schema_backlog_summary_markdown(triage), encoding="utf-8")
+    console.print(encoded)
+
+
+@schema_app.command("validate-contract")
+def schema_validate_contract(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        service = SchemaContractValidator(session, database_url)
+        payload = service.validate()
+        markdown = service.to_markdown(payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_full_cover_json(output, payload)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(markdown, encoding="utf-8")
+    console.print(encoded)
+    if payload["summary"]["hard_failure_count"]:
+        raise typer.Exit(1)
+
+
+@schema_app.command("validate-endpoint-matrix")
+def schema_validate_endpoint_matrix(
+    manifest: Annotated[Path, typer.Option("--manifest")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        service = EndpointMatrixContractValidator(session, manifest, database_url)
+        payload = service.validate()
+        markdown = service.to_markdown(payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_full_cover_json(output, payload)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(markdown, encoding="utf-8")
+    console.print(encoded)
+    if payload["summary"]["hard_failure_count"]:
+        raise typer.Exit(1)
+
+
+@schema_app.command("full-coverage-gap")
+def schema_full_coverage_gap(
+    full_manifest: Annotated[Path, typer.Option("--full-manifest")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+    edge_case_output: Annotated[Path | None, typer.Option("--edge-case-output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        service = FullCoverageGapService(session, database_url, full_manifest)
+        payload = service.analyze()
+        markdown = service.to_markdown(payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_full_cover_json(output, payload)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(markdown, encoding="utf-8")
+    if edge_case_output is not None:
+        write_edge_case_manifest(edge_case_output, payload["edge_case_candidates"])
+    console.print(encoded)
+
+
+@schema_app.command("capacity-estimate")
+def schema_capacity_estimate(
+    full_manifest: Annotated[Path, typer.Option("--full-manifest")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        service = FullScaleCapacityEstimator(session, database_url, full_manifest)
+        payload = service.estimate()
+        markdown = service.to_markdown(payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_full_cover_json(output, payload)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(markdown, encoding="utf-8")
+    console.print(encoded)
+
+
+@schema_app.command("manual-domain-review")
+def schema_manual_domain_review(
+    input_path: Annotated[Path, typer.Option("--input")],
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+) -> None:
+    source_payload = json.loads(input_path.read_text(encoding="utf-8"))
+    payload = manual_domain_review_backlog(source_payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        write_full_cover_json(output, payload)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(manual_domain_review_markdown(payload), encoding="utf-8")
     console.print(encoded)
 
 

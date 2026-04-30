@@ -88,7 +88,9 @@ class ManifestRow:
 class ManifestBuildReport:
     output: str
     count: int
-    limit: int
+    limit: int | None
+    full_scope: bool
+    manifest_only: bool
     max_per_configuration: int
     max_discovery_pages: int
     discovery_page_size: int
@@ -132,9 +134,11 @@ class StratifiedManifestBuilder:
         include_required_baselines: bool = True,
         actual_crash_only: bool = False,
         exclude_manifests: list[Path] | None = None,
+        full_scope: bool = False,
+        manifest_only: bool = False,
     ) -> ManifestBuildReport:
         required_baselines = REQUIRED_BASELINES if include_required_baselines else {}
-        if limit < len(required_baselines):
+        if not full_scope and limit < len(required_baselines):
             raise ValueError("limit must fit required baseline tests")
         if max_per_configuration < 1:
             raise ValueError("max_per_configuration must be >= 1")
@@ -150,8 +154,12 @@ class StratifiedManifestBuilder:
         )
         max_test_date = date(year_to, 12, 31) if year_to else None
         excluded_test_numbers = load_excluded_test_numbers(exclude_manifests or [])
-        required = self._fetch_required_baselines(
-            effective_min_date, max_test_date, required_baselines
+        required = (
+            []
+            if full_scope
+            else self._fetch_required_baselines(
+                effective_min_date, max_test_date, required_baselines
+            )
         )
         reference_candidates = (
             load_reference_manifest_candidates(
@@ -161,14 +169,27 @@ class StratifiedManifestBuilder:
             else []
         )
         reference_lookup = {candidate.test_no: candidate for candidate in reference_candidates}
-        discovered = self._fetch_discovery_candidates(
-            max_discovery_pages=max_discovery_pages,
-            discovery_page_size=discovery_page_size,
-            min_test_date=effective_min_date,
-            max_test_date=max_test_date,
-            reference_candidates=reference_candidates,
-            reference_lookup=reference_lookup,
-            balance_strategy=balance_strategy,
+        effective_max_discovery_pages = (
+            max(max_discovery_pages, 1000) if full_scope else max_discovery_pages
+        )
+        discovered = (
+            self._fetch_full_scope_candidates(
+                max_discovery_pages=effective_max_discovery_pages,
+                discovery_page_size=discovery_page_size,
+                min_test_date=effective_min_date,
+                max_test_date=max_test_date,
+                reference_lookup=reference_lookup,
+            )
+            if full_scope
+            else self._fetch_discovery_candidates(
+                max_discovery_pages=max_discovery_pages,
+                discovery_page_size=discovery_page_size,
+                min_test_date=effective_min_date,
+                max_test_date=max_test_date,
+                reference_candidates=reference_candidates,
+                reference_lookup=reference_lookup,
+                balance_strategy=balance_strategy,
+            )
         )
         if actual_crash_only:
             required = [
@@ -199,7 +220,9 @@ class StratifiedManifestBuilder:
                 if candidate.test_no not in excluded_test_numbers
             ]
 
-        if balance_strategy == "type-year":
+        if full_scope:
+            rows = select_full_scope_manifest_rows(discovered, required_baselines)
+        elif balance_strategy == "type-year":
             rows = select_type_year_manifest_rows(
                 required + discovered,
                 limit=limit,
@@ -216,7 +239,9 @@ class StratifiedManifestBuilder:
                 max_per_configuration,
                 required_baselines=required_baselines,
             )
-        if len(rows) != limit:
+        if full_scope and not rows:
+            raise ValueError("manifest hard gate failed: full-scope manifest is empty")
+        if not full_scope and len(rows) != limit:
             raise ValueError(f"manifest hard gate failed: expected {limit} rows, got {len(rows)}")
         if (
             include_required_baselines
@@ -236,9 +261,11 @@ class StratifiedManifestBuilder:
         return ManifestBuildReport(
             output=str(output),
             count=len(rows),
-            limit=limit,
+            limit=None if full_scope else limit,
+            full_scope=full_scope,
+            manifest_only=manifest_only,
             max_per_configuration=max_per_configuration,
-            max_discovery_pages=max_discovery_pages,
+            max_discovery_pages=effective_max_discovery_pages,
             discovery_page_size=discovery_page_size,
             min_test_date=effective_min_date.isoformat(),
             year_from=year_from,
@@ -325,6 +352,23 @@ class StratifiedManifestBuilder:
             reference_lookup,
         )
 
+    def _fetch_full_scope_candidates(
+        self,
+        max_discovery_pages: int,
+        discovery_page_size: int,
+        min_test_date: date,
+        max_test_date: date | None,
+        reference_lookup: dict[int, ManifestCandidate],
+    ) -> list[ManifestCandidate]:
+        return self._fetch_search_pages(
+            max_discovery_pages,
+            discovery_page_size,
+            min_test_date,
+            max_test_date,
+            None,
+            reference_lookup,
+        )
+
     def _fetch_search_pages(
         self,
         max_discovery_pages: int,
@@ -335,6 +379,7 @@ class StratifiedManifestBuilder:
         reference_lookup: dict[int, ManifestCandidate],
     ) -> list[ManifestCandidate]:
         candidates: list[ManifestCandidate] = []
+        fetched_rows = 0
         for page_number in range(max_discovery_pages):
             query: dict[str, object] = {
                 "page_number": page_number,
@@ -349,6 +394,7 @@ class StratifiedManifestBuilder:
             rows = _payload_rows(result)
             if not rows:
                 break
+            fetched_rows += len(rows)
             for row in rows:
                 normalized_row = _with_reference_date(row, reference_lookup)
                 candidate = _candidate_from_row(
@@ -361,6 +407,11 @@ class StratifiedManifestBuilder:
                 )
                 if candidate is not None:
                     candidates.append(candidate)
+            total = _pagination_total(result.payload)
+            if total is not None and fetched_rows >= total:
+                break
+            if len(rows) < discovery_page_size:
+                break
         return candidates
 
 
@@ -479,6 +530,24 @@ def select_type_year_manifest_rows(
     return rows
 
 
+def select_full_scope_manifest_rows(
+    candidates: list[ManifestCandidate],
+    required_baselines: dict[int, str] | None = None,
+) -> list[ManifestRow]:
+    baselines = required_baselines if required_baselines is not None else REQUIRED_BASELINES
+    rows: list[ManifestRow] = []
+    for index, candidate in enumerate(_dedupe_candidates(candidates), 1):
+        rows.append(
+            _row(
+                candidate,
+                baselines.get(candidate.test_no, "full_scope_live_by_search"),
+                index,
+                balance_status="full_scope",
+            )
+        )
+    return rows
+
+
 def write_manifest(output: Path, rows: list[ManifestRow]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8", newline="") as file:
@@ -568,6 +637,16 @@ def _payload_rows(result: SourceFetchResult) -> list[dict[str, object]]:
     if not isinstance(raw_rows, list):
         return []
     return [row for row in raw_rows if isinstance(row, dict)]
+
+
+def _pagination_total(payload: dict[str, object]) -> int | None:
+    meta = payload.get("meta")
+    if not isinstance(meta, dict):
+        return None
+    pagination = meta.get("pagination")
+    if not isinstance(pagination, dict):
+        return None
+    return _int_value(pagination.get("total"))
 
 
 def _candidate_from_row(
