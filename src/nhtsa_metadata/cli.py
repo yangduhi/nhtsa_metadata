@@ -148,6 +148,13 @@ def catalog_build_manifest(
     balance_strategy: Annotated[str, typer.Option("--balance-strategy")] = "configuration",
     balance_priority: Annotated[str, typer.Option("--balance-priority")] = "type-first",
     relax_balance: Annotated[bool, typer.Option("--relax-balance")] = False,
+    include_required_baselines: Annotated[
+        bool, typer.Option("--include-required-baselines/--no-include-required-baselines")
+    ] = True,
+    actual_crash_only: Annotated[bool, typer.Option("--actual-crash-only")] = False,
+    exclude_manifest: Annotated[
+        list[Path] | None, typer.Option("--exclude-manifest")
+    ] = None,
     reference_database: Annotated[Path | None, typer.Option("--reference-database")] = None,
 ) -> None:
     if source != "live":
@@ -168,6 +175,9 @@ def catalog_build_manifest(
         balance_strategy=balance_strategy,  # type: ignore[arg-type]
         balance_priority=balance_priority,  # type: ignore[arg-type]
         relax_balance=relax_balance,
+        include_required_baselines=include_required_baselines,
+        actual_crash_only=actual_crash_only,
+        exclude_manifests=exclude_manifest or [],
         reference_database=reference_database
         or (Path(settings.reference_database_path) if settings.reference_database_path else None),
     )

@@ -17,6 +17,13 @@ REQUIRED_BASELINES = {
     10001: "required_baseline_frontal_barrier",
     10003: "required_baseline_side_impactor",
 }
+ACTUAL_CRASH_CONFIGURATIONS = {
+    "IMPACTOR INTO VEHICLE",
+    "ROLLOVER",
+    "VEHICLE INTO BARRIER",
+    "VEHICLE INTO POLE",
+    "VEHICLE INTO VEHICLE",
+}
 CONFIGURATION_BUCKET_ALIASES = {
     "FORWARD COLLISION WARNING PERFORMANCE TEST": "FCW_PERFORMANCE",
     "IMPACTOR INTO IMPACTOR": "IMPACTOR_INTO_IMPACTOR",
@@ -92,6 +99,10 @@ class ManifestBuildReport:
     balance_priority: str
     relax_balance: bool
     required_test_numbers: list[int]
+    include_required_baselines: bool
+    actual_crash_only: bool
+    exclude_manifests: list[str]
+    excluded_test_numbers: int
     reference_database: str | None
     discovered_live_candidates: int
     reference_candidates: int
@@ -118,8 +129,12 @@ class StratifiedManifestBuilder:
         balance_strategy: BalanceStrategy = "configuration",
         balance_priority: BalancePriority = "type-first",
         relax_balance: bool = False,
+        include_required_baselines: bool = True,
+        actual_crash_only: bool = False,
+        exclude_manifests: list[Path] | None = None,
     ) -> ManifestBuildReport:
-        if limit < len(REQUIRED_BASELINES):
+        required_baselines = REQUIRED_BASELINES if include_required_baselines else {}
+        if limit < len(required_baselines):
             raise ValueError("limit must fit required baseline tests")
         if max_per_configuration < 1:
             raise ValueError("max_per_configuration must be >= 1")
@@ -134,7 +149,10 @@ class StratifiedManifestBuilder:
             max(min_test_date, date(year_from, 1, 1)) if year_from else min_test_date
         )
         max_test_date = date(year_to, 12, 31) if year_to else None
-        required = self._fetch_required_baselines(effective_min_date, max_test_date)
+        excluded_test_numbers = load_excluded_test_numbers(exclude_manifests or [])
+        required = self._fetch_required_baselines(
+            effective_min_date, max_test_date, required_baselines
+        )
         reference_candidates = (
             load_reference_manifest_candidates(
                 reference_database, effective_min_date, max_test_date
@@ -152,6 +170,34 @@ class StratifiedManifestBuilder:
             reference_lookup=reference_lookup,
             balance_strategy=balance_strategy,
         )
+        if actual_crash_only:
+            required = [
+                candidate for candidate in required if _is_actual_crash_candidate(candidate)
+            ]
+            discovered = [
+                candidate for candidate in discovered if _is_actual_crash_candidate(candidate)
+            ]
+            reference_candidates = [
+                candidate
+                for candidate in reference_candidates
+                if _is_actual_crash_candidate(candidate)
+            ]
+        if excluded_test_numbers:
+            required = [
+                candidate
+                for candidate in required
+                if candidate.test_no not in excluded_test_numbers
+            ]
+            discovered = [
+                candidate
+                for candidate in discovered
+                if candidate.test_no not in excluded_test_numbers
+            ]
+            reference_candidates = [
+                candidate
+                for candidate in reference_candidates
+                if candidate.test_no not in excluded_test_numbers
+            ]
 
         if balance_strategy == "type-year":
             rows = select_type_year_manifest_rows(
@@ -161,15 +207,28 @@ class StratifiedManifestBuilder:
                 year_to=year_to,
                 balance_priority=balance_priority,
                 relax_balance=relax_balance,
+                required_baselines=required_baselines,
             )
         else:
             rows = select_manifest_rows(
-                required + discovered + reference_candidates, limit, max_per_configuration
+                required + discovered + reference_candidates,
+                limit,
+                max_per_configuration,
+                required_baselines=required_baselines,
             )
         if len(rows) != limit:
             raise ValueError(f"manifest hard gate failed: expected {limit} rows, got {len(rows)}")
-        if {row.test_no for row in rows} & set(REQUIRED_BASELINES) != set(REQUIRED_BASELINES):
+        if (
+            include_required_baselines
+            and {row.test_no for row in rows} & set(required_baselines) != set(required_baselines)
+        ):
             raise ValueError("manifest hard gate failed: required anchors missing")
+        if excluded_test_numbers and {row.test_no for row in rows} & excluded_test_numbers:
+            raise ValueError("manifest hard gate failed: excluded test_no selected")
+        if actual_crash_only and any(
+            not _is_actual_crash_configuration(row.test_configuration) for row in rows
+        ):
+            raise ValueError("manifest hard gate failed: non-crash row selected")
         write_manifest(output, rows)
         year_distribution = Counter(str(row.test_year) for row in rows)
         configuration_distribution = Counter(_row_configuration_bucket(row) for row in rows)
@@ -187,7 +246,11 @@ class StratifiedManifestBuilder:
             balance_strategy=balance_strategy,
             balance_priority=balance_priority,
             relax_balance=relax_balance,
-            required_test_numbers=sorted(REQUIRED_BASELINES),
+            required_test_numbers=sorted(required_baselines),
+            include_required_baselines=include_required_baselines,
+            actual_crash_only=actual_crash_only,
+            exclude_manifests=[str(path) for path in exclude_manifests or []],
+            excluded_test_numbers=len(excluded_test_numbers),
             reference_database=str(reference_database) if reference_database is not None else None,
             discovered_live_candidates=len({candidate.test_no for candidate in discovered}),
             reference_candidates=len(reference_candidates),
@@ -197,17 +260,20 @@ class StratifiedManifestBuilder:
         )
 
     def _fetch_required_baselines(
-        self, min_test_date: date, max_test_date: date | None
+        self,
+        min_test_date: date,
+        max_test_date: date | None,
+        required_baselines: dict[int, str],
     ) -> list[ManifestCandidate]:
         candidates: list[ManifestCandidate] = []
-        for test_no in sorted(REQUIRED_BASELINES):
+        for test_no in sorted(required_baselines):
             result = self.client.fetch("test_summary", test_no=test_no)
             rows = _payload_rows(result)
             if rows:
                 scope = evaluate_scope_from_fetch_results([result], min_test_date)
                 candidate = _candidate_from_row(
                     rows[0],
-                    note=REQUIRED_BASELINES[test_no],
+                    note=required_baselines[test_no],
                     min_test_date=min_test_date,
                     max_test_date=max_test_date,
                     scope=scope,
@@ -302,13 +368,15 @@ def select_manifest_rows(
     candidates: list[ManifestCandidate],
     limit: int,
     max_per_configuration: int,
+    required_baselines: dict[int, str] | None = None,
 ) -> list[ManifestRow]:
+    baselines = required_baselines if required_baselines is not None else REQUIRED_BASELINES
     selected: list[ManifestCandidate] = []
     seen: set[int] = set()
     configuration_counts: dict[str, int] = {}
 
     for candidate in candidates:
-        if candidate.test_no not in REQUIRED_BASELINES:
+        if candidate.test_no not in baselines:
             continue
         if candidate.test_no in seen:
             continue
@@ -332,7 +400,7 @@ def select_manifest_rows(
     return [
         _row(
             candidate,
-            REQUIRED_BASELINES.get(candidate.test_no, "stratified_configuration"),
+            baselines.get(candidate.test_no, "stratified_configuration"),
             index,
         )
         for index, candidate in enumerate(selected, 1)
@@ -346,11 +414,13 @@ def select_type_year_manifest_rows(
     year_to: int | None,
     balance_priority: BalancePriority,
     relax_balance: bool,
+    required_baselines: dict[int, str] | None = None,
 ) -> list[ManifestRow]:
     del balance_priority  # v1 implements the approved type-first behavior only.
+    baselines = required_baselines if required_baselines is not None else REQUIRED_BASELINES
     unique = _dedupe_candidates(candidates)
-    required = [candidate for candidate in unique if candidate.test_no in REQUIRED_BASELINES]
-    available = [candidate for candidate in unique if candidate.test_no not in REQUIRED_BASELINES]
+    required = [candidate for candidate in unique if candidate.test_no in baselines]
+    available = [candidate for candidate in unique if candidate.test_no not in baselines]
     selected: list[ManifestCandidate] = []
     seen: set[int] = set()
     for candidate in sorted(required, key=lambda item: item.test_no):
@@ -401,7 +471,7 @@ def select_type_year_manifest_rows(
         rows.append(
             _row(
                 candidate,
-                REQUIRED_BASELINES.get(candidate.test_no, "type_first_live_by_search"),
+                baselines.get(candidate.test_no, "type_first_live_by_search"),
                 index,
                 balance_status=balance_status,
             )
@@ -477,6 +547,20 @@ def load_reference_manifest_candidates(
             )
         )
     return candidates
+
+
+def load_excluded_test_numbers(manifest_paths: list[Path]) -> set[int]:
+    excluded: set[int] = set()
+    for manifest_path in manifest_paths:
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"exclude manifest not found: {manifest_path}")
+        with manifest_path.open("r", encoding="utf-8", newline="") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                test_no = _int_value(row.get("test_no"))
+                if test_no is not None:
+                    excluded.add(test_no)
+    return excluded
 
 
 def _payload_rows(result: SourceFetchResult) -> list[dict[str, object]]:
@@ -591,6 +675,17 @@ def _configuration_key_from_text(test_configuration: str | None) -> str | None:
         return None
     normalized = re.sub(r"\s+", " ", test_configuration.strip().upper())
     return CONFIGURATION_BUCKET_ALIASES.get(normalized, normalized)
+
+
+def _is_actual_crash_candidate(candidate: ManifestCandidate) -> bool:
+    return _is_actual_crash_configuration(candidate.test_configuration)
+
+
+def _is_actual_crash_configuration(test_configuration: str | None) -> bool:
+    if not test_configuration:
+        return False
+    normalized = re.sub(r"\s+", " ", test_configuration.strip().upper())
+    return normalized in ACTUAL_CRASH_CONFIGURATIONS
 
 
 def _selection_bucket_from_text(test_configuration: str | None) -> str | None:

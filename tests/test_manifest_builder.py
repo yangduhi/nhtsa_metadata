@@ -269,6 +269,33 @@ def test_type_year_manifest_builder_sends_test_date_to_and_uses_global_search(
     assert rows[0]["balance_status"].startswith("relaxed")
 
 
+def test_actual_crash_manifest_excludes_existing_and_non_crash(tmp_path: Path) -> None:
+    exclude_manifest = tmp_path / "existing.csv"
+    exclude_manifest.write_text(
+        "test_no,test_date\n7201,2011-01-03\n10001,2016-12-12\n10003,2016-12-14\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "actual_crash_manifest.csv"
+
+    report = StratifiedManifestBuilder(FakeDiscoveryClient()).build(
+        output=output,
+        limit=1,
+        max_discovery_pages=1,
+        discovery_page_size=10,
+        include_required_baselines=False,
+        actual_crash_only=True,
+        exclude_manifests=[exclude_manifest],
+    )
+
+    with output.open("r", encoding="utf-8", newline="") as file:
+        rows = list(csv.DictReader(file))
+    assert report.actual_crash_only is True
+    assert report.include_required_baselines is False
+    assert report.excluded_test_numbers == 3
+    assert [int(row["test_no"]) for row in rows] == [20002]
+    assert rows[0]["test_configuration"] == "IMPACTOR INTO VEHICLE"
+
+
 def test_cli_build_manifest_requires_allow_live(tmp_path: Path) -> None:
     output = tmp_path / "pilot_manifest.csv"
     result = CliRunner().invoke(
