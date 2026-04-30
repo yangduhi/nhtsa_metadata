@@ -14,8 +14,7 @@ This command runs linting, type checking, and tests. It must not call live NHTSA
 powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 ```
 
-The harness delegates to `scripts\verify.ps1` and performs repo-local preflight checks. It must not
-call live NHTSA APIs.
+The harness delegates to `scripts\verify.ps1` and performs repo-local preflight checks. It must not call live NHTSA APIs.
 
 ## Scope Policy
 
@@ -25,93 +24,51 @@ call live NHTSA APIs.
 
 ## Live API Policy
 
-Live API access is disabled by default. Manual live validation commands require explicit live
-opt-in: `--source live`, `--allow-live`, and `NHTSA_METADATA_ALLOW_LIVE=true`. Default tests and
-verification scripts must remain fixture/mock only.
+Live API access is disabled by default. Manual live commands require explicit opt-in: `--source live`, `--allow-live`, and `NHTSA_METADATA_ALLOW_LIVE=true`.
 
-## Bounded Pilot Commands
+## Data Artifact Policy
 
-```powershell
-.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog build-manifest `
-  --source live `
-  --allow-live `
-  --output data\stratified_live_pilot_2011plus_manifest.csv `
-  --limit 40 `
-  --max-per-configuration 5 `
-  --min-test-date 2011-01-01 `
-  --reference-database D:\vscode\pulse_analysis\data\db\nhtsa_data.db
+`data/*.csv`, `data/*.sqlite`, `data/*.json`, raw dumps, downloaded files, and package contents are ignored and must not be committed.
 
-powershell -ExecutionPolicy Bypass -File scripts\live_pilot_validate.ps1 `
-  -AllowLive `
-  -DatabaseUrl sqlite:///data/stratified_live_pilot_2011plus.sqlite `
-  -Manifest data\stratified_live_pilot_2011plus_manifest.csv
-```
+## Schema v1.0 Local Analysis Commands
 
-The reference database is only a bounded manifest seed. Live metadata collection still happens
-through NHTSA endpoints, and the pilot remains bounded by manifest. It must not be treated as a
-full crawler.
-
-Schema audit can include duplicate details without raw payload text:
+These commands are local-only when pointed at an existing SQLite DB:
 
 ```powershell
-.venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
-  --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite `
-  --output data\schema_audit_report_2011plus.json `
-  --include-duplicate-details
+.venv\Scripts\python.exe -m nhtsa_metadata.cli schema rebuild-code-values `
+  --database-url sqlite:///data/stratified_live_pilot_2011plus_1500_actual_crash.sqlite `
+  --output data/code_values_rebuild_2011plus_1500_actual_crash.json
+
+.venv\Scripts\python.exe -m nhtsa_metadata.cli schema optimize-analyze `
+  --database-url sqlite:///data/stratified_live_pilot_2011plus_1500_actual_crash.sqlite `
+  --output data/schema_optimization_report_2011plus_1500_v1_final.json `
+  --include-index-candidates `
+  --include-column-candidates `
+  --include-facet-candidates
+
+.venv\Scripts\python.exe -m nhtsa_metadata.cli schema backlog-triage `
+  --input data/schema_optimization_report_2011plus_1500_v1_final.json `
+  --output data/schema_v1_0_backlog_triage.json `
+  --markdown-output docs/phase_reports/schema_v1_0_backlog_triage.md `
+  --summary-output docs/phase_reports/schema_v1_0_backlog_summary.md
 ```
 
-After parser or canonical dedupe changes, an existing pilot DB can be rebuilt from stored
-`source_payloads` without live calls:
+## Full-Scale Approval Sequence
 
-```powershell
-.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog rebuild `
-  --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite
-```
+Full-scale crawler execution is not part of default operations. Approval sequence:
 
-When `--test-no` is omitted, rebuild uses distinct test numbers already present in
-`source_payloads`.
+1. Verify default fixture/mock checks.
+2. Run live safety negative checks.
+3. Review Schema v1.0 finalization reports.
+4. Review full-scale approval package.
+5. Owner explicitly approves full-scale Stage D.
+6. Build manifest-only dry run.
+7. Run approved collection with backup, delay, retry, and resume policy.
+8. Run post-run endpoint completeness, schema audit, optimization, code_values rebuild, scale report, and API smoke.
 
-## Semantic Cardinality Gate
+## Stop Conditions
 
-Before increasing pilot size, the 40-test 2011+ DB must pass schema audit semantic checks:
-
-- `scope.violations = []` and `scope.read_model_violations = []`.
-- duplicate groups for vehicles, test participants, barriers, occupants, restraints,
-  instrumentation channels, and media assets are all zero.
-- `semantic_cardinality.hard_failures = []`.
-- `10001` normalized occupant slots equal 2.
-- `10001` occupant-specific restraint assignments are at least 6.
-- `10001` barrier semantic status is `fixed`, `pass`, or explicitly documented as
-  `accepted_known_condition`.
-- `10003` normalized occupant slots equal 2 and participant pattern includes
-  `subject_vehicle` plus `impactor_vehicle`.
-
-## 100-Test Expansion Gate
-
-Before a 100-test bounded pilot, run gates in this order:
-
-1. `scripts\verify.ps1`.
-2. `.harness\run.ps1`.
-3. Live safety negative checks.
-4. Rebuild and recheck the 40-test 2011+ schema audit if the DB is available.
-5. Build the 100-test manifest only.
-6. Request separate approval before live collection.
-
-Recommended 100-test manifest-only command:
-
-```powershell
-$env:NHTSA_METADATA_ALLOW_LIVE = "true"
-.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog build-manifest `
-  --source live `
-  --allow-live `
-  --output data\stratified_live_pilot_2011plus_100_manifest.csv `
-  --limit 100 `
-  --max-per-configuration 10 `
-  --min-test-date 2011-01-01 `
-  --reference-database D:\vscode\pulse_analysis\data\db\nhtsa_data.db
-```
-
-Do not run 100-test live collect until separately approved.
+Stop if live gates are bypassed, file download starts, source payload persistence fails, pre-2011 canonical rows appear, duplicate groups become non-zero, semantic hard failures appear, P0/P1 schema/source conflicts appear, or data artifacts become staged/tracked.
 
 ## Source Contract Documents
 

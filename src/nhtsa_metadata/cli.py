@@ -1,7 +1,7 @@
 import json
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import typer
 from rich.console import Console
@@ -17,6 +17,7 @@ from nhtsa_metadata.db.session import (
     ensure_schema,
 )
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
+from nhtsa_metadata.services.code_values import CodeValueRebuildService
 from nhtsa_metadata.services.coverage_service import CoverageService
 from nhtsa_metadata.services.endpoint_completeness import (
     EndpointBackfillService,
@@ -29,6 +30,7 @@ from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
 from nhtsa_metadata.services.scale_readiness import ScaleReadinessService
 from nhtsa_metadata.services.schema_audit import SchemaAuditService, report_to_dict
 from nhtsa_metadata.services.schema_optimization import SchemaOptimizationService
+from nhtsa_metadata.services.schema_v1_policy import triage_schema_optimization
 from nhtsa_metadata.sources.nhtsa_crash.live_client import (
     LiveAccessNotAllowedError,
     LiveNhtsaClient,
@@ -362,6 +364,44 @@ def schema_optimize_analyze(
     console.print(encoded)
 
 
+@schema_app.command("rebuild-code-values")
+def schema_rebuild_code_values(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        payload = CodeValueRebuildService(session).rebuild()
+        session.commit()
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    console.print(encoded)
+
+
+@schema_app.command("backlog-triage")
+def schema_backlog_triage(
+    input_path: Annotated[Path, typer.Option("--input")],
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+    summary_output: Annotated[Path | None, typer.Option("--summary-output")] = None,
+) -> None:
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    triage = triage_schema_optimization(payload)
+    encoded = json.dumps(triage, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(_schema_backlog_triage_markdown(triage), encoding="utf-8")
+    if summary_output is not None:
+        summary_output.parent.mkdir(parents=True, exist_ok=True)
+        summary_output.write_text(_schema_backlog_summary_markdown(triage), encoding="utf-8")
+    console.print(encoded)
+
+
 def _session_factory(database_url: str | None):
     return _session_factory_for_settings(_effective_settings(database_url))
 
@@ -409,6 +449,65 @@ def _schema_audit_has_scope_hard_failures(payload: dict[str, object]) -> bool:
     if isinstance(semantic, dict):
         semantic_failed = bool(semantic.get("hard_failures"))
     return scope_failed or semantic_failed
+
+
+def _schema_backlog_triage_markdown(triage: dict[str, object]) -> str:
+    summary = cast(dict[str, object], triage["summary"])
+    items = cast(list[dict[str, Any]], triage.get("items", []))
+    lines = [
+        "# Schema v1.0 Backlog Triage",
+        "",
+        "## Scope",
+        "- Based on local schema optimization output.",
+        "- No live API call, no full crawler, no file download.",
+        "",
+        "## Summary",
+    ]
+    for key in (
+        "total_recommendations",
+        "p0",
+        "p1",
+        "p2",
+        "p3",
+        "apply_before_full_scale",
+        "accept_for_v1_0_no_change",
+        "defer_post_full_scale",
+        "requires_manual_domain_review",
+        "reject_false_positive",
+        "raw_only_no_action",
+    ):
+        lines.append(f"- {key}: {summary[key]}")
+    lines.extend(["", "## Decision Matrix"])
+    for item in items[:50]:
+        lines.append(
+            "- "
+            f"{item.get('recommendation_priority')} "
+            f"{item.get('recommendation_class')} -> "
+            f"{item.get('v1_0_decision')}: "
+            f"{item.get('target')}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _schema_backlog_summary_markdown(triage: dict[str, object]) -> str:
+    summary = cast(dict[str, object], triage["summary"])
+    blocked = triage.get("full_scale_blocked")
+    return "\n".join(
+        [
+            "# Schema v1.0 Backlog Summary",
+            "",
+            f"- P0/P1/P2/P3: {summary['p0']}/{summary['p1']}/{summary['p2']}/{summary['p3']}",
+            f"- apply_before_full_scale: {summary['apply_before_full_scale']}",
+            f"- accept_for_v1_0_no_change: {summary['accept_for_v1_0_no_change']}",
+            f"- defer_post_full_scale: {summary['defer_post_full_scale']}",
+            f"- requires_manual_domain_review: {summary['requires_manual_domain_review']}",
+            f"- raw_only_no_action: {summary['raw_only_no_action']}",
+            f"- full_scale_blocked: {blocked}",
+            "",
+            "Decision: full-scale readiness remains pass only when P0/P1 stay at zero.",
+            "",
+        ]
+    )
 
 
 if __name__ == "__main__":

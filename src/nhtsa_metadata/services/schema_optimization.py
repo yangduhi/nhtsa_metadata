@@ -88,6 +88,7 @@ class SchemaOptimizationService:
         endpoint_coverage = self._endpoint_coverage()
         conflict_taxonomy = self._conflict_taxonomy()
         dictionary_domain_report = self._dictionary_domain_report(field_profiles)
+        code_values_coverage = self._code_values_coverage()
         data_package_invariant = self._data_package_invariant()
         facet_coverage = self._facet_coverage()
         no_action = [
@@ -121,6 +122,7 @@ class SchemaOptimizationService:
             "field_profiles": field_profiles[:FIELD_PROFILE_LIMIT],
             "recommendations": recommendations[:RECOMMENDATION_LIMIT],
             "dictionary_domain_report": dictionary_domain_report,
+            "code_values_coverage": code_values_coverage,
             "source_conflict_taxonomy": conflict_taxonomy,
             "data_package_invariant": data_package_invariant,
             "test_facet_coverage": facet_coverage,
@@ -190,6 +192,8 @@ class SchemaOptimizationService:
                 f"- column candidates: {summary['column_candidates']}",
                 f"- dictionary candidates: {summary['dictionary_candidates']}",
                 f"- code values candidates: {summary['code_values_candidates']}",
+                f"- populated code value rows: "
+                f"{payload['code_values_coverage']['total_code_values']}",
                 f"- facet candidates: {summary['facet_candidates']}",
                 f"- index candidates: {summary['index_candidates']}",
                 f"- alias map candidates: {summary['alias_map_candidates']}",
@@ -518,6 +522,28 @@ class SchemaOptimizationService:
             for profile in field_profiles
             if profile["recommendation_class"] == "code_values_candidate"
         ][:RECOMMENDATION_LIMIT]
+
+    def _code_values_coverage(self) -> dict[str, Any]:
+        rows = list(self.session.scalars(select(CodeValue)))
+        counter = Counter(row.code_set for row in rows)
+        observed_counter: Counter[str] = Counter()
+        observed_test_counter: Counter[str] = Counter()
+        for row in rows:
+            observed_counter[row.code_set] += row.seen_count
+            extra = row.extra_json or {}
+            observed_test_counter[row.code_set] += int(extra.get("observed_test_count") or 0)
+        return {
+            "total_code_values": len(rows),
+            "code_sets": [
+                {
+                    "code_set": code_set,
+                    "value_count": counter[code_set],
+                    "observed_count": observed_counter[code_set],
+                    "observed_test_count": observed_test_counter[code_set],
+                }
+                for code_set in sorted(counter)
+            ],
+        }
 
     def _data_package_invariant(self) -> dict[str, Any]:
         candidate_urls: set[str] = set()

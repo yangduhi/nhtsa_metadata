@@ -4,7 +4,7 @@
 `modelYear`는 scope 판단 기준이 아니다.
 `test_date` missing 또는 parse 실패 record는 기본적으로 canonical/read-model에서 제외한다.
 
-Required CLI commands:
+## Required CLI Commands
 
 ```powershell
 python -m nhtsa_metadata.cli catalog discover --max-pages 1 --source fixture
@@ -15,33 +15,40 @@ python -m nhtsa_metadata.cli catalog rebuild --test-no 10001
 python -m nhtsa_metadata.cli catalog rebuild
 python -m nhtsa_metadata.cli coverage report
 python -m nhtsa_metadata.cli schema audit --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite --output data/schema_audit_report_2011plus.json
-python -m nhtsa_metadata.cli schema audit --include-duplicate-details --duplicate-detail-limit 50
+python -m nhtsa_metadata.cli schema endpoint-completeness --manifest data/stratified_live_pilot_2011plus_manifest.csv --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite
+python -m nhtsa_metadata.cli schema optimize-analyze --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite
+python -m nhtsa_metadata.cli schema rebuild-code-values --database-url sqlite:///data/stratified_live_pilot_2011plus.sqlite
+python -m nhtsa_metadata.cli schema backlog-triage --input data/schema_optimization_report.json
 ```
 
-Required options:
+## Live Access Gate
 
-- `--dry-run`
-- `--database-url`
-- `--source fixture|live`
+Live API commands require all of:
+
+- `--source live`
 - `--allow-live`
-- `--endpoint-set summary|metadata|detail|assets|all`
-- `--paginate-instrumentation`
-- `--save-fixture`
-- `--stop-on-source-conflict`
-- `--allow-empty-endpoints`
-- `--retry-count`
-- `--timeout-seconds`
-- `--rate-limit-delay-seconds`
-- `--resume`
-- `--max-pages`
-- `--max-items`
-- `catalog build-manifest --min-test-date`
-- `catalog build-manifest --reference-database`
-- `schema audit --include-duplicate-details`
-- `schema audit --duplicate-detail-limit`
+- `NHTSA_METADATA_ALLOW_LIVE=true`
 
-Canonical rebuild requirements:
+Default tests, `scripts/verify.ps1`, and `.harness/run.ps1` must remain fixture/mock only.
+
+## Manifest Builder Requirements
+
+- Use `testDateFrom=2011-01-01` for live by-search scope.
+- Do not use `modelYearFrom` as scope.
+- Do not use `test_no` ranges as scope.
+- Support bounded manifests and explicit excluded manifests for expansion pilots.
+- `--actual-crash-only` limits manifest rows to approved actual crash configurations.
+- Summary links are not endpoint authority; endpoint templates and discovered request keys are authoritative.
+
+## Canonical Rebuild Requirements
 
 - Rebuild must preserve the 2011+ scope gate even when stored `source_payloads` include legacy rows.
 - Rebuild must preserve occupant request context for occupant-scoped detail endpoints.
 - Rebuild must keep full crawler and file download behavior outside the default command path.
+- Rebuild must preserve raw/provenance lineage through `canonical_row_sources`.
+
+## Schema v1.0 Derived Commands
+
+`schema rebuild-code-values` is local-only and rebuilds the derived `code_values` registry from canonical/read-model tables. It must not call live APIs.
+
+`schema backlog-triage` classifies local schema optimization output into v1.0 decisions. It must not call live APIs.
