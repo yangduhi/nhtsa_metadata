@@ -10,7 +10,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from nhtsa_metadata.config import Settings, get_settings, sanitize_database_url
-from nhtsa_metadata.db.models import CollectionRun, CollectionRunItem
+from nhtsa_metadata.db.models import CollectionRun, CollectionRunItem, CrashTest
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.scope import evaluate_scope_from_fetch_results
 from nhtsa_metadata.sources.nhtsa_crash.client import LiveAccessNotAllowedError
@@ -70,43 +70,74 @@ class CatalogBuilder:
         )
         self.session.add(run)
         self.session.flush()
+        self.session.commit()
         payload_count = 0
         canonical_rows = 0
-        for test_no in test_numbers:
-            run_item = CollectionRunItem(
-                run_id=run.id,
-                test_no=test_no,
-                status="started",
-                endpoint_statuses_json={
-                    "min_test_date": self.settings.min_test_date.isoformat()
-                },
-            )
-            self.session.add(run_item)
-            self.session.flush()
-            scope_probe = self._fetch_scope_probe(test_no)
-            scope_decision = evaluate_scope_from_fetch_results(
-                scope_probe, self.settings.min_test_date
-            )
-            run_item.endpoint_statuses_json = {"scope": scope_decision.to_json()}
-            if not scope_decision.in_scope:
-                self.ingestion.canonical_service.delete_test_canonical_rows(test_no)
-                self.ingestion.read_model_builder.rebuild_facets()
-                run_item.status = "skipped_out_of_scope"
-                run_item.finished_at = datetime.utcnow()
-                continue
-            fetch_results = self._fetch_fixture_matrix(test_no, preloaded_results=scope_probe)
-            payload_count += len(
-                self.ingestion.ingest_fetch_results(
-                    fetch_results, run_id=run.id, run_item_id=run_item.id
+        try:
+            for test_no in test_numbers:
+                run_item = CollectionRunItem(
+                    run_id=run.id,
+                    test_no=test_no,
+                    status="started",
+                    endpoint_statuses_json={
+                        "min_test_date": self.settings.min_test_date.isoformat()
+                    },
                 )
-            )
-            canonical_rows += self.ingestion.rebuild_test(test_no)
-            run_item.status = "succeeded"
-            run_item.finished_at = datetime.utcnow()
-        run.status = "succeeded"
-        run.finished_at = datetime.utcnow()
-        self.session.commit()
+                self.session.add(run_item)
+                self.session.flush()
+                if self.mode == "live" and self._canonical_test_exists(test_no):
+                    run_item.status = "skipped_existing"
+                    run_item.finished_at = datetime.utcnow()
+                    self.session.commit()
+                    continue
+                scope_probe = self._fetch_scope_probe(test_no)
+                scope_decision = evaluate_scope_from_fetch_results(
+                    scope_probe, self.settings.min_test_date
+                )
+                run_item.endpoint_statuses_json = {"scope": scope_decision.to_json()}
+                if not scope_decision.in_scope:
+                    self.ingestion.canonical_service.delete_test_canonical_rows(test_no)
+                    self.ingestion.read_model_builder.rebuild_facets()
+                    run_item.status = "skipped_out_of_scope"
+                    run_item.finished_at = datetime.utcnow()
+                    self.session.commit()
+                    continue
+                fetch_results = self._fetch_fixture_matrix(test_no, preloaded_results=scope_probe)
+                payload_count += len(
+                    self.ingestion.ingest_fetch_results(
+                        fetch_results, run_id=run.id, run_item_id=run_item.id
+                    )
+                )
+                canonical_rows += self.ingestion.rebuild_test(test_no)
+                run_item.status = "succeeded"
+                run_item.finished_at = datetime.utcnow()
+                self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            persisted_run = self.session.get(CollectionRun, run.id)
+            if persisted_run is not None:
+                persisted_run.status = "failed"
+                persisted_run.error_json = {
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+                persisted_run.finished_at = datetime.utcnow()
+                self.session.commit()
+            raise
+        persisted_run = self.session.get(CollectionRun, run.id)
+        if persisted_run is not None:
+            persisted_run.status = "succeeded"
+            persisted_run.finished_at = datetime.utcnow()
+            self.session.commit()
         return CollectResult(run.id, test_numbers, payload_count, canonical_rows)
+
+    def _canonical_test_exists(self, test_no: int) -> bool:
+        return (
+            self.session.query(CrashTest.id)
+            .filter(CrashTest.test_no == test_no)
+            .first()
+            is not None
+        )
 
     def _fetch_scope_probe(self, test_no: int) -> list[SourceFetchResult]:
         return [self.client.fetch("test_summary", test_no=test_no)]

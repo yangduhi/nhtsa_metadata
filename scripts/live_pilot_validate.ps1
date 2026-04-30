@@ -15,20 +15,39 @@ if (-not (Test-Path -LiteralPath $Manifest)) {
     throw "Manifest not found: $Manifest"
 }
 
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Command
+    )
+    & $Command
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE"
+    }
+}
+
 $env:NHTSA_METADATA_ALLOW_LIVE = "true"
 
-.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog collect `
-    --manifest $Manifest `
-    --database-url $DatabaseUrl `
-    --source live `
-    --allow-live
+Invoke-Checked {
+    .venv\Scripts\python.exe -m nhtsa_metadata.cli catalog collect `
+        --manifest $Manifest `
+        --database-url $DatabaseUrl `
+        --source live `
+        --allow-live
+}
 
-.venv\Scripts\python.exe -m nhtsa_metadata.cli coverage report --database-url $DatabaseUrl
-.venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
-    --database-url $DatabaseUrl `
-    --output $AuditOutput `
-    --include-duplicate-details
-.venv\Scripts\python.exe -m nhtsa_metadata.cli scale report --database-url $DatabaseUrl
+Invoke-Checked {
+    .venv\Scripts\python.exe -m nhtsa_metadata.cli coverage report --database-url $DatabaseUrl
+}
+Invoke-Checked {
+    .venv\Scripts\python.exe -m nhtsa_metadata.cli schema audit `
+        --database-url $DatabaseUrl `
+        --output $AuditOutput `
+        --include-duplicate-details
+}
+Invoke-Checked {
+    .venv\Scripts\python.exe -m nhtsa_metadata.cli scale report --database-url $DatabaseUrl
+}
 
 $env:NHTSA_METADATA_PILOT_DB_URL = $DatabaseUrl
 @'
@@ -63,3 +82,6 @@ for path in paths:
         raise SystemExit(json.dumps(result, sort_keys=True))
 print(json.dumps(result, sort_keys=True))
 '@ | .venv\Scripts\python.exe -
+if ($LASTEXITCODE -ne 0) {
+    throw "API smoke failed with exit code $LASTEXITCODE"
+}

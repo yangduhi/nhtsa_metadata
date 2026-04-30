@@ -35,6 +35,9 @@ def test_discovery_endpoint_is_paginated_for_manifest_building() -> None:
     endpoint = ENDPOINT_BY_NAME["test_results"]
     assert endpoint.is_paginated is True
     assert endpoint.default_count == 100
+    search_endpoint = ENDPOINT_BY_NAME["search"]
+    assert search_endpoint.is_paginated is True
+    assert search_endpoint.default_count == 100
 
 
 def test_test_detail_is_optional_core() -> None:

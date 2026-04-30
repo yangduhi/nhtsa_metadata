@@ -23,6 +23,7 @@ from nhtsa_metadata.services.live_baseline_assertions import assert_live_baselin
 from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
 from nhtsa_metadata.services.scale_readiness import ScaleReadinessService
 from nhtsa_metadata.services.schema_audit import SchemaAuditService, report_to_dict
+from nhtsa_metadata.services.schema_optimization import SchemaOptimizationService
 from nhtsa_metadata.sources.nhtsa_crash.live_client import (
     LiveAccessNotAllowedError,
     LiveNhtsaClient,
@@ -137,6 +138,11 @@ def catalog_build_manifest(
     max_discovery_pages: Annotated[int, typer.Option("--max-discovery-pages")] = 5,
     discovery_page_size: Annotated[int, typer.Option("--discovery-page-size")] = 100,
     min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
+    year_from: Annotated[int | None, typer.Option("--year-from")] = None,
+    year_to: Annotated[int | None, typer.Option("--year-to")] = None,
+    balance_strategy: Annotated[str, typer.Option("--balance-strategy")] = "configuration",
+    balance_priority: Annotated[str, typer.Option("--balance-priority")] = "type-first",
+    relax_balance: Annotated[bool, typer.Option("--relax-balance")] = False,
     reference_database: Annotated[Path | None, typer.Option("--reference-database")] = None,
 ) -> None:
     if source != "live":
@@ -152,6 +158,11 @@ def catalog_build_manifest(
         max_discovery_pages=max_discovery_pages,
         discovery_page_size=discovery_page_size,
         min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+        year_from=year_from,
+        year_to=year_to,
+        balance_strategy=balance_strategy,  # type: ignore[arg-type]
+        balance_priority=balance_priority,  # type: ignore[arg-type]
+        relax_balance=relax_balance,
         reference_database=reference_database
         or (Path(settings.reference_database_path) if settings.reference_database_path else None),
     )
@@ -238,6 +249,49 @@ def schema_audit(
     console.print(encoded)
     if _schema_audit_has_scope_hard_failures(payload):
         raise typer.Exit(1)
+
+
+@schema_app.command("optimize-analyze")
+def schema_optimize_analyze(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+    min_test_support: Annotated[int, typer.Option("--min-test-support")] = 5,
+    min_non_null_ratio: Annotated[float, typer.Option("--min-non-null-ratio")] = 0.10,
+    max_dictionary_distinct_ratio: Annotated[
+        float, typer.Option("--max-dictionary-distinct-ratio")
+    ] = 0.25,
+    include_index_candidates: Annotated[
+        bool, typer.Option("--include-index-candidates")
+    ] = False,
+    include_column_candidates: Annotated[
+        bool, typer.Option("--include-column-candidates")
+    ] = False,
+    include_facet_candidates: Annotated[
+        bool, typer.Option("--include-facet-candidates")
+    ] = False,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        service = SchemaOptimizationService(session)
+        payload = service.analyze(
+            database_url=database_url,
+            min_test_support=min_test_support,
+            min_non_null_ratio=min_non_null_ratio,
+            max_dictionary_distinct_ratio=max_dictionary_distinct_ratio,
+            include_index_candidates=include_index_candidates,
+            include_column_candidates=include_column_candidates,
+            include_facet_candidates=include_facet_candidates,
+        )
+        markdown = service.to_markdown(payload)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(markdown, encoding="utf-8")
+    console.print(encoded)
 
 
 def _session_factory(database_url: str | None):

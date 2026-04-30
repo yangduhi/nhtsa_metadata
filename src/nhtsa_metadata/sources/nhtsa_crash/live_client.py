@@ -37,25 +37,36 @@ class LiveNhtsaClient:
             else settings.rate_limit_delay_seconds
         )
         self._transport = transport
+        self._client: httpx.Client | None = None
 
     def fetch(self, endpoint_name: str, **path_and_query: object) -> SourceFetchResult:
         endpoint = get_endpoint(endpoint_name)
         url = endpoint.render_url(self.settings.nhtsa_base_url, **path_and_query)
         attempts = self.retry_count + 1
         last_response: httpx.Response | None = None
+        last_error: httpx.HTTPError | None = None
         started = time.perf_counter()
-        with httpx.Client(timeout=self.timeout_seconds, transport=self._transport) as client:
-            for attempt in range(attempts):
-                if self.rate_limit_delay_seconds:
-                    time.sleep(self.rate_limit_delay_seconds)
+        client = self._http_client()
+        for attempt in range(attempts):
+            if self.rate_limit_delay_seconds:
+                time.sleep(self.rate_limit_delay_seconds)
+            try:
                 response = client.get(url)
-                last_response = response
-                if response.status_code not in {429, 500, 502, 503, 504}:
-                    break
+            except httpx.HTTPError as exc:
+                last_error = exc
                 if attempt + 1 >= attempts:
                     break
                 time.sleep(min(2**attempt, 5))
+                continue
+            last_response = response
+            if response.status_code not in {429, 500, 502, 503, 504}:
+                break
+            if attempt + 1 >= attempts:
+                break
+            time.sleep(min(2**attempt, 5))
         if last_response is None:
+            if last_error is not None:
+                raise last_error
             raise RuntimeError("live request did not produce a response")
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         payload = _json_object(last_response)
@@ -70,6 +81,11 @@ class LiveNhtsaClient:
             elapsed_ms=elapsed_ms,
             response_headers=dict(last_response.headers),
         )
+
+    def _http_client(self) -> httpx.Client:
+        if self._client is None:
+            self._client = httpx.Client(timeout=self.timeout_seconds, transport=self._transport)
+        return self._client
 
     def fetch_all_pages(
         self, endpoint_name: str, **path_and_query: object

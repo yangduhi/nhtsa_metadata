@@ -3,23 +3,41 @@ from __future__ import annotations
 import csv
 import re
 import sqlite3
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Literal, Protocol
 
 from nhtsa_metadata.services.scope import ScopeDecision, evaluate_scope_from_fetch_results
 from nhtsa_metadata.sources.nhtsa_crash.contracts import SourceFetchResult
 
 REQUIRED_BASELINES = {
+    7201: "required_anchor_2011_start",
     10001: "required_baseline_frontal_barrier",
     10003: "required_baseline_side_impactor",
 }
 CONFIGURATION_BUCKET_ALIASES = {
+    "FORWARD COLLISION WARNING PERFORMANCE TEST": "FCW_PERFORMANCE",
+    "IMPACTOR INTO IMPACTOR": "IMPACTOR_INTO_IMPACTOR",
+    "VEHICLE INTO BARRIER": "VTB",
+    "IMPACTOR INTO VEHICLE": "ITV",
+    "LANE DEPARTURE WARNING PERFORMANCE TEST": "LDW_PERFORMANCE",
+    "LOW RISK DEPLOYMENT": "LRD",
+    "SLED WITH VEHICLE BODY": "SLED_WITH_BODY",
+    "SLED WITHOUT VEHICLE BODY": "SLED_NO_BODY",
+    "STATIC AIR BAG TEST SIDE": "STATIC_SIDE_AIRBAG",
+    "TRAFFIC JAM ASSIST": "TRAFFIC_JAM_ASSIST",
+    "VEHICLE INTO POLE": "VTP",
+    "VEHICLE INTO VEHICLE": "VTV",
+}
+SELECTION_BUCKET_ALIASES = {
     "VEHICLE INTO BARRIER": "VTB",
     "IMPACTOR INTO VEHICLE": "ITV",
     "VEHICLE INTO POLE": "VTP",
 }
+BalanceStrategy = Literal["configuration", "type-year"]
+BalancePriority = Literal["type-first", "year-first", "equal-weighted"]
 
 
 class DiscoveryClient(Protocol):
@@ -35,16 +53,28 @@ class ManifestCandidate:
     test_configuration_key: str | None
     test_configuration: str | None
     impact_angle: object | None = None
+    test_type: str | None = None
+    model_year: int | None = None
+    vehicle_make: str | None = None
+    vehicle_model: str | None = None
+    candidate_source: str = "live"
 
 
 @dataclass(frozen=True)
 class ManifestRow:
     test_no: int
     test_date: str
+    test_year: int
     test_configuration_key: str | None
     test_configuration: str | None
+    test_type: str | None
+    model_year: int | None
+    vehicle_make: str | None
+    vehicle_model: str | None
     reason: str
     scope_status: str
+    selection_priority: int
+    balance_status: str
 
 
 @dataclass(frozen=True)
@@ -56,8 +86,18 @@ class ManifestBuildReport:
     max_discovery_pages: int
     discovery_page_size: int
     min_test_date: str
+    year_from: int | None
+    year_to: int | None
+    balance_strategy: str
+    balance_priority: str
+    relax_balance: bool
     required_test_numbers: list[int]
     reference_database: str | None
+    discovered_live_candidates: int
+    reference_candidates: int
+    year_distribution: dict[str, int]
+    configuration_distribution: dict[str, int]
+    balance_status: str
 
 
 class StratifiedManifestBuilder:
@@ -73,24 +113,67 @@ class StratifiedManifestBuilder:
         discovery_page_size: int = 100,
         min_test_date: date = date(2011, 1, 1),
         reference_database: Path | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+        balance_strategy: BalanceStrategy = "configuration",
+        balance_priority: BalancePriority = "type-first",
+        relax_balance: bool = False,
     ) -> ManifestBuildReport:
         if limit < len(REQUIRED_BASELINES):
             raise ValueError("limit must fit required baseline tests")
         if max_per_configuration < 1:
             raise ValueError("max_per_configuration must be >= 1")
-        required = self._fetch_required_baselines(min_test_date)
-        discovered = self._fetch_discovery_candidates(
-            max_discovery_pages, discovery_page_size, min_test_date
+        if discovery_page_size < 1:
+            raise ValueError("discovery_page_size must be >= 1")
+        if balance_strategy not in {"configuration", "type-year"}:
+            raise ValueError("unsupported balance_strategy")
+        if balance_priority not in {"type-first", "year-first", "equal-weighted"}:
+            raise ValueError("unsupported balance_priority")
+
+        effective_min_date = (
+            max(min_test_date, date(year_from, 1, 1)) if year_from else min_test_date
         )
+        max_test_date = date(year_to, 12, 31) if year_to else None
+        required = self._fetch_required_baselines(effective_min_date, max_test_date)
         reference_candidates = (
-            load_reference_manifest_candidates(reference_database, min_test_date)
+            load_reference_manifest_candidates(
+                reference_database, effective_min_date, max_test_date
+            )
             if reference_database is not None
             else []
         )
-        rows = select_manifest_rows(
-            required + discovered + reference_candidates, limit, max_per_configuration
+        reference_lookup = {candidate.test_no: candidate for candidate in reference_candidates}
+        discovered = self._fetch_discovery_candidates(
+            max_discovery_pages=max_discovery_pages,
+            discovery_page_size=discovery_page_size,
+            min_test_date=effective_min_date,
+            max_test_date=max_test_date,
+            reference_candidates=reference_candidates,
+            reference_lookup=reference_lookup,
+            balance_strategy=balance_strategy,
         )
+
+        if balance_strategy == "type-year":
+            rows = select_type_year_manifest_rows(
+                required + discovered,
+                limit=limit,
+                year_from=year_from,
+                year_to=year_to,
+                balance_priority=balance_priority,
+                relax_balance=relax_balance,
+            )
+        else:
+            rows = select_manifest_rows(
+                required + discovered + reference_candidates, limit, max_per_configuration
+            )
+        if len(rows) != limit:
+            raise ValueError(f"manifest hard gate failed: expected {limit} rows, got {len(rows)}")
+        if {row.test_no for row in rows} & set(REQUIRED_BASELINES) != set(REQUIRED_BASELINES):
+            raise ValueError("manifest hard gate failed: required anchors missing")
         write_manifest(output, rows)
+        year_distribution = Counter(str(row.test_year) for row in rows)
+        configuration_distribution = Counter(_row_configuration_bucket(row) for row in rows)
+        balance_status = _manifest_balance_status(rows, year_from, year_to)
         return ManifestBuildReport(
             output=str(output),
             count=len(rows),
@@ -98,12 +181,24 @@ class StratifiedManifestBuilder:
             max_per_configuration=max_per_configuration,
             max_discovery_pages=max_discovery_pages,
             discovery_page_size=discovery_page_size,
-            min_test_date=min_test_date.isoformat(),
+            min_test_date=effective_min_date.isoformat(),
+            year_from=year_from,
+            year_to=year_to,
+            balance_strategy=balance_strategy,
+            balance_priority=balance_priority,
+            relax_balance=relax_balance,
             required_test_numbers=sorted(REQUIRED_BASELINES),
             reference_database=str(reference_database) if reference_database is not None else None,
+            discovered_live_candidates=len({candidate.test_no for candidate in discovered}),
+            reference_candidates=len(reference_candidates),
+            year_distribution=dict(sorted(year_distribution.items())),
+            configuration_distribution=dict(sorted(configuration_distribution.items())),
+            balance_status=balance_status,
         )
 
-    def _fetch_required_baselines(self, min_test_date: date) -> list[ManifestCandidate]:
+    def _fetch_required_baselines(
+        self, min_test_date: date, max_test_date: date | None
+    ) -> list[ManifestCandidate]:
         candidates: list[ManifestCandidate] = []
         for test_no in sorted(REQUIRED_BASELINES):
             result = self.client.fetch("test_summary", test_no=test_no)
@@ -114,7 +209,9 @@ class StratifiedManifestBuilder:
                     rows[0],
                     note=REQUIRED_BASELINES[test_no],
                     min_test_date=min_test_date,
+                    max_test_date=max_test_date,
                     scope=scope,
+                    candidate_source="live_required",
                 )
                 if candidate is not None:
                     candidates.append(candidate)
@@ -123,33 +220,81 @@ class StratifiedManifestBuilder:
         return candidates
 
     def _fetch_discovery_candidates(
-        self, max_discovery_pages: int, discovery_page_size: int, min_test_date: date
+        self,
+        max_discovery_pages: int,
+        discovery_page_size: int,
+        min_test_date: date,
+        max_test_date: date | None,
+        reference_candidates: list[ManifestCandidate],
+        reference_lookup: dict[int, ManifestCandidate],
+        balance_strategy: BalanceStrategy,
+    ) -> list[ManifestCandidate]:
+        if balance_strategy != "type-year":
+            return self._fetch_search_pages(
+                max_discovery_pages,
+                discovery_page_size,
+                min_test_date,
+                max_test_date,
+                None,
+                reference_lookup,
+            )
+        configurations = sorted(
+            {
+                candidate.test_configuration
+                for candidate in reference_candidates
+                if candidate.test_configuration
+            }
+        )
+        del configurations
+        # The live by-search endpoint currently returns date-less summary rows, and its
+        # testConfiguration query is not reliable for these labels. Use bounded global
+        # discovery, then stratify locally with reference DB dates.
+        effective_pages = max(max_discovery_pages, 50)
+        return self._fetch_search_pages(
+            effective_pages,
+            discovery_page_size,
+            min_test_date,
+            max_test_date,
+            None,
+            reference_lookup,
+        )
+
+    def _fetch_search_pages(
+        self,
+        max_discovery_pages: int,
+        discovery_page_size: int,
+        min_test_date: date,
+        max_test_date: date | None,
+        test_configuration: str | None,
+        reference_lookup: dict[int, ManifestCandidate],
     ) -> list[ManifestCandidate]:
         candidates: list[ManifestCandidate] = []
         for page_number in range(max_discovery_pages):
-            result = self.client.fetch(
-                "search",
-                page_number=page_number,
-                count=discovery_page_size,
-                testDateFrom=min_test_date.isoformat(),
-            )
+            query: dict[str, object] = {
+                "page_number": page_number,
+                "count": discovery_page_size,
+                "testDateFrom": min_test_date.isoformat(),
+            }
+            if max_test_date is not None:
+                query["testDateTo"] = max_test_date.isoformat()
+            if test_configuration is not None:
+                query["testConfiguration"] = test_configuration
+            result = self.client.fetch("search", **query)
             rows = _payload_rows(result)
+            if not rows:
+                break
             for row in rows:
+                normalized_row = _with_reference_date(row, reference_lookup)
                 candidate = _candidate_from_row(
-                    row,
-                    note="stratified discovery",
+                    normalized_row,
+                    note="live_by_search",
                     min_test_date=min_test_date,
+                    max_test_date=max_test_date,
                     scope=None,
+                    candidate_source="live_search",
                 )
                 if candidate is not None:
                     candidates.append(candidate)
-            pagination = result.meta.pagination
-            if pagination is None:
-                break
-            accumulated = len(candidates)
-            total = pagination.total or 0
-            if not pagination.next_url and (total == 0 or accumulated >= total):
-                break
         return candidates
 
 
@@ -158,7 +303,7 @@ def select_manifest_rows(
     limit: int,
     max_per_configuration: int,
 ) -> list[ManifestRow]:
-    selected: list[ManifestRow] = []
+    selected: list[ManifestCandidate] = []
     seen: set[int] = set()
     configuration_counts: dict[str, int] = {}
 
@@ -167,7 +312,7 @@ def select_manifest_rows(
             continue
         if candidate.test_no in seen:
             continue
-        selected.append(_row(candidate, REQUIRED_BASELINES[candidate.test_no]))
+        selected.append(candidate)
         seen.add(candidate.test_no)
         configuration_counts[_configuration_bucket(candidate)] = (
             configuration_counts.get(_configuration_bucket(candidate), 0) + 1
@@ -181,10 +326,87 @@ def select_manifest_rows(
         bucket = _configuration_bucket(candidate)
         if configuration_counts.get(bucket, 0) >= max_per_configuration:
             continue
-        selected.append(_row(candidate, "stratified_configuration"))
+        selected.append(candidate)
         seen.add(candidate.test_no)
         configuration_counts[bucket] = configuration_counts.get(bucket, 0) + 1
-    return selected
+    return [
+        _row(
+            candidate,
+            REQUIRED_BASELINES.get(candidate.test_no, "stratified_configuration"),
+            index,
+        )
+        for index, candidate in enumerate(selected, 1)
+    ]
+
+
+def select_type_year_manifest_rows(
+    candidates: list[ManifestCandidate],
+    limit: int,
+    year_from: int | None,
+    year_to: int | None,
+    balance_priority: BalancePriority,
+    relax_balance: bool,
+) -> list[ManifestRow]:
+    del balance_priority  # v1 implements the approved type-first behavior only.
+    unique = _dedupe_candidates(candidates)
+    required = [candidate for candidate in unique if candidate.test_no in REQUIRED_BASELINES]
+    available = [candidate for candidate in unique if candidate.test_no not in REQUIRED_BASELINES]
+    selected: list[ManifestCandidate] = []
+    seen: set[int] = set()
+    for candidate in sorted(required, key=lambda item: item.test_no):
+        selected.append(candidate)
+        seen.add(candidate.test_no)
+
+    remaining_limit = limit - len(selected)
+    type_capacities = Counter(_configuration_bucket(candidate) for candidate in available)
+    type_quota = _waterfill_quota(dict(type_capacities), remaining_limit)
+    year_capacities = Counter(candidate.test_date.year for candidate in available)
+    year_quota = _waterfill_quota(dict(year_capacities), remaining_limit)
+    year_counts: Counter[int] = Counter(candidate.test_date.year for candidate in selected)
+    type_counts: Counter[str] = Counter(_configuration_bucket(candidate) for candidate in selected)
+
+    grouped: dict[str, list[ManifestCandidate]] = {}
+    for candidate in available:
+        grouped.setdefault(_configuration_bucket(candidate), []).append(candidate)
+    for bucket in grouped:
+        grouped[bucket].sort(key=lambda item: (item.test_date, item.test_no))
+
+    for raw_bucket in sorted(type_quota, key=str):
+        bucket = str(raw_bucket)
+        target = type_quota[bucket]
+        while type_counts[bucket] < target and len(selected) < limit:
+            next_candidate = _pop_best_year_candidate(
+                grouped[bucket], seen, year_counts, year_quota
+            )
+            if next_candidate is None:
+                break
+            selected.append(next_candidate)
+            seen.add(next_candidate.test_no)
+            type_counts[bucket] += 1
+            year_counts[next_candidate.test_date.year] += 1
+
+    if len(selected) < limit and relax_balance:
+        leftovers = [candidate for candidate in available if candidate.test_no not in seen]
+        while len(selected) < limit and leftovers:
+            next_candidate = _pop_best_year_candidate(leftovers, seen, year_counts, year_quota)
+            if next_candidate is None:
+                break
+            selected.append(next_candidate)
+            seen.add(next_candidate.test_no)
+            year_counts[next_candidate.test_date.year] += 1
+
+    rows = []
+    balance_status = _candidate_balance_status(selected, year_from, year_to)
+    for index, candidate in enumerate(selected, 1):
+        rows.append(
+            _row(
+                candidate,
+                REQUIRED_BASELINES.get(candidate.test_no, "type_first_live_by_search"),
+                index,
+                balance_status=balance_status,
+            )
+        )
+    return rows
 
 
 def write_manifest(output: Path, rows: list[ManifestRow]) -> None:
@@ -195,10 +417,17 @@ def write_manifest(output: Path, rows: list[ManifestRow]) -> None:
             fieldnames=[
                 "test_no",
                 "test_date",
+                "test_year",
                 "test_configuration_key",
                 "test_configuration",
+                "test_type",
+                "model_year",
+                "vehicle_make",
+                "vehicle_model",
                 "reason",
                 "scope_status",
+                "selection_priority",
+                "balance_status",
             ],
         )
         writer.writeheader()
@@ -207,7 +436,7 @@ def write_manifest(output: Path, rows: list[ManifestRow]) -> None:
 
 
 def load_reference_manifest_candidates(
-    database_path: Path, min_test_date: date
+    database_path: Path, min_test_date: date, max_test_date: date | None = None
 ) -> list[ManifestCandidate]:
     """Load bounded manifest seed candidates from the legacy local SQLite catalog."""
     if not database_path.exists():
@@ -217,7 +446,7 @@ def load_reference_manifest_candidates(
     try:
         rows = connection.execute(
             """
-            SELECT test_no, test_date, crash_type
+            SELECT test_no, test_date, crash_type, make, model, year
             FROM crash_tests
             WHERE test_date IS NOT NULL AND TRIM(test_date) != ''
             ORDER BY test_date, test_no
@@ -231,14 +460,20 @@ def load_reference_manifest_candidates(
         test_date = _date_value(row["test_date"])
         if test_no is None or test_date is None or test_date < min_test_date:
             continue
+        if max_test_date is not None and test_date > max_test_date:
+            continue
         test_configuration = _str_value(row["crash_type"])
         candidates.append(
             ManifestCandidate(
                 test_no=test_no,
                 note="reference_database_seed",
                 test_date=test_date,
-                test_configuration_key=None,
+                test_configuration_key=_configuration_key_from_text(test_configuration),
                 test_configuration=test_configuration,
+                model_year=_int_value(row["year"]),
+                vehicle_make=_str_value(row["make"]),
+                vehicle_model=_str_value(row["model"]),
+                candidate_source="reference",
             )
         )
     return candidates
@@ -255,7 +490,9 @@ def _candidate_from_row(
     row: dict[str, object],
     note: str,
     min_test_date: date,
+    max_test_date: date | None,
     scope: ScopeDecision | None,
+    candidate_source: str,
 ) -> ManifestCandidate | None:
     test_no = _int_value(_first(row, "testNo", "TSTNO"))
     if test_no is None:
@@ -267,34 +504,184 @@ def _candidate_from_row(
     )
     if test_date is None or test_date < min_test_date:
         return None
+    if max_test_date is not None and test_date > max_test_date:
+        return None
+    test_configuration = _str_value(_first(row, "testConfiguration", "TSTCFND"))
+    test_configuration_key = _str_value(row.get("testConfigurationKey"))
     return ManifestCandidate(
         test_no=test_no,
         note=note,
         test_date=test_date,
-        test_configuration_key=_str_value(row.get("testConfigurationKey")),
-        test_configuration=_str_value(_first(row, "testConfiguration", "TSTCFND")),
+        test_configuration_key=test_configuration_key
+        or _configuration_key_from_text(test_configuration),
+        test_configuration=test_configuration,
         impact_angle=_first(row, "impactAngle", "IMPANG"),
+        test_type=_str_value(_first(row, "testType", "TSTTYPD")),
+        model_year=_int_value(_first(row, "modelYear", "vehicleModelYear", "YEAR")),
+        vehicle_make=_str_value(_first(row, "vehicleMake", "make", "MAKED")),
+        vehicle_model=_str_value(_first(row, "vehicleModel", "model", "MODELD")),
+        candidate_source=candidate_source,
     )
 
 
-def _row(candidate: ManifestCandidate, selection_reason: str) -> ManifestRow:
+def _with_reference_date(
+    row: dict[str, object], reference_lookup: dict[int, ManifestCandidate]
+) -> dict[str, object]:
+    test_no = _int_value(_first(row, "testNo", "TSTNO"))
+    if test_no is None:
+        return row
+    reference = reference_lookup.get(test_no)
+    if reference is None:
+        return row
+    enriched = dict(row)
+    if _first(enriched, "testDate", "TSTDAT") is None:
+        enriched["testDate"] = reference.test_date.isoformat()
+    if _first(enriched, "testConfiguration", "TSTCFND") is None:
+        enriched["testConfiguration"] = reference.test_configuration
+    if _first(enriched, "modelYear", "vehicleModelYear", "YEAR") is None:
+        enriched["modelYear"] = reference.model_year
+    if _first(enriched, "vehicleMake", "make", "MAKED") is None:
+        enriched["vehicleMake"] = reference.vehicle_make
+    if _first(enriched, "vehicleModel", "model", "MODELD") is None:
+        enriched["vehicleModel"] = reference.vehicle_model
+    return enriched
+
+
+def _row(
+    candidate: ManifestCandidate,
+    selection_reason: str,
+    selection_priority: int,
+    balance_status: str = "balanced",
+) -> ManifestRow:
     return ManifestRow(
         test_no=candidate.test_no,
         test_date=candidate.test_date.isoformat(),
+        test_year=candidate.test_date.year,
         test_configuration_key=candidate.test_configuration_key,
         test_configuration=candidate.test_configuration,
+        test_type=candidate.test_type,
+        model_year=candidate.model_year,
+        vehicle_make=candidate.vehicle_make,
+        vehicle_model=candidate.vehicle_model,
         reason=selection_reason,
         scope_status="in_scope",
+        selection_priority=selection_priority,
+        balance_status=balance_status,
     )
 
 
 def _configuration_bucket(candidate: ManifestCandidate) -> str:
+    if candidate.test_configuration:
+        return _selection_bucket_from_text(candidate.test_configuration) or "UNKNOWN"
     if candidate.test_configuration_key:
         return candidate.test_configuration_key.strip().upper()
-    if candidate.test_configuration:
-        normalized = re.sub(r"\s+", " ", candidate.test_configuration.strip().upper())
-        return CONFIGURATION_BUCKET_ALIASES.get(normalized, normalized)
     return "UNKNOWN"
+
+
+def _row_configuration_bucket(row: ManifestRow) -> str:
+    if row.test_configuration:
+        return _selection_bucket_from_text(row.test_configuration) or "UNKNOWN"
+    if row.test_configuration_key:
+        return row.test_configuration_key.strip().upper()
+    return "UNKNOWN"
+
+
+def _configuration_key_from_text(test_configuration: str | None) -> str | None:
+    if not test_configuration:
+        return None
+    normalized = re.sub(r"\s+", " ", test_configuration.strip().upper())
+    return CONFIGURATION_BUCKET_ALIASES.get(normalized, normalized)
+
+
+def _selection_bucket_from_text(test_configuration: str | None) -> str | None:
+    if not test_configuration:
+        return None
+    normalized = re.sub(r"\s+", " ", test_configuration.strip().upper())
+    return SELECTION_BUCKET_ALIASES.get(normalized, normalized)
+
+
+def _dedupe_candidates(candidates: list[ManifestCandidate]) -> list[ManifestCandidate]:
+    deduped: dict[int, ManifestCandidate] = {}
+    for candidate in candidates:
+        existing = deduped.get(candidate.test_no)
+        if existing is None or _source_priority(candidate) < _source_priority(existing):
+            deduped[candidate.test_no] = candidate
+    return sorted(deduped.values(), key=lambda item: (item.test_date, item.test_no))
+
+
+def _source_priority(candidate: ManifestCandidate) -> int:
+    if candidate.candidate_source == "live_required":
+        return 0
+    if candidate.candidate_source == "live_search":
+        return 1
+    return 2
+
+
+def _waterfill_quota(capacities: dict[Any, int], total: int) -> dict[Any, int]:
+    active = set(capacities)
+    quota = {key: 0 for key in capacities}
+    remaining = total
+    while active:
+        share = remaining // len(active)
+        capped = [key for key in active if capacities[key] <= share]
+        if not capped:
+            break
+        for key in sorted(capped, key=str):
+            quota[key] = capacities[key]
+            remaining -= quota[key]
+            active.remove(key)
+    if active:
+        ordered = sorted(active, key=str)
+        base = remaining // len(ordered)
+        extra = remaining % len(ordered)
+        for index, key in enumerate(ordered):
+            quota[key] = base + (1 if index < extra else 0)
+    return quota
+
+
+def _pop_best_year_candidate(
+    candidates: list[ManifestCandidate],
+    seen: set[int],
+    year_counts: Counter[int],
+    year_quota: dict[object, int],
+) -> ManifestCandidate | None:
+    available = [candidate for candidate in candidates if candidate.test_no not in seen]
+    if not available:
+        return None
+    best = min(
+        available,
+        key=lambda item: (
+            year_counts[item.test_date.year] - int(year_quota.get(item.test_date.year, 0)),
+            item.test_date,
+            item.test_no,
+        ),
+    )
+    candidates.remove(best)
+    return best
+
+
+def _candidate_balance_status(
+    candidates: list[ManifestCandidate], year_from: int | None, year_to: int | None
+) -> str:
+    if year_from is None or year_to is None:
+        return "balanced"
+    expected_years = list(range(year_from, year_to + 1))
+    year_counts = Counter(candidate.test_date.year for candidate in candidates)
+    if any(year_counts.get(year, 0) == 0 for year in expected_years):
+        return "relaxed_missing_year"
+    return "type_first_relaxed_year"
+
+
+def _manifest_balance_status(
+    rows: list[ManifestRow], year_from: int | None, year_to: int | None
+) -> str:
+    if year_from is None or year_to is None:
+        return "balanced"
+    expected_years = list(range(year_from, year_to + 1))
+    counts = Counter(row.test_year for row in rows)
+    if any(counts.get(year, 0) == 0 for year in expected_years):
+        return "relaxed_missing_year"
+    return "type_first_relaxed_year"
 
 
 def _first(row: dict[str, object], *keys: str) -> object | None:

@@ -75,6 +75,8 @@ ENDPOINTS: tuple[EndpointDefinition, ...] = (
         name="search",
         path_template="/vehicle-database-test-results/by-search",
         endpoint_group="discovery",
+        is_paginated=True,
+        default_count=100,
         requires_test_no=False,
         parser_name="api_results",
     ),

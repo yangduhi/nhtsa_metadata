@@ -256,6 +256,14 @@ class CanonicalUpsertService:
                         TestParticipant.display_name == display_name,
                     )
                 )
+            if participant_kind == "barrier":
+                return self.session.scalar(
+                    select(TestParticipant).where(
+                        TestParticipant.test_id == test_id,
+                        TestParticipant.participant_kind == participant_kind,
+                        TestParticipant.source_vehicle_no.is_(None),
+                    )
+                )
         if spec.table_name == "occupants":
             normalized_location = spec.values.get("occupant_location_normalized")
             if normalized_location is not None:
