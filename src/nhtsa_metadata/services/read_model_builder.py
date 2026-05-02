@@ -32,7 +32,7 @@ class ReadModelBuilder:
         self.session = session
         self.min_test_date = min_test_date or get_settings().min_test_date
 
-    def rebuild_for_test(self, test_no: int) -> None:
+    def rebuild_for_test(self, test_no: int, rebuild_facets: bool = True) -> None:
         test = self.session.scalar(select(CrashTest).where(CrashTest.test_no == test_no))
         if test is None:
             return
@@ -45,7 +45,8 @@ class ReadModelBuilder:
             test.test_date, test.test_date_parse_status, self.min_test_date
         ):
             self.session.flush()
-            self.rebuild_facets()
+            if rebuild_facets:
+                self.rebuild_facets()
             return
         vehicles = list(self.session.scalars(select(Vehicle).where(Vehicle.test_id == test.id)))
         assets = list(self.session.scalars(select(MediaAsset).where(MediaAsset.test_id == test.id)))
@@ -108,7 +109,8 @@ class ReadModelBuilder:
                 )
             )
         self.session.flush()
-        self.rebuild_facets()
+        if rebuild_facets:
+            self.rebuild_facets()
 
     def rebuild_facets(self) -> None:
         self.session.execute(delete(TestFacet))

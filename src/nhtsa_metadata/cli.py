@@ -43,6 +43,10 @@ from nhtsa_metadata.services.full_cover_readiness import (
 from nhtsa_metadata.services.ingestion_service import IngestionService
 from nhtsa_metadata.services.live_baseline_assertions import assert_live_baseline
 from nhtsa_metadata.services.manifest_builder import StratifiedManifestBuilder
+from nhtsa_metadata.services.rule_classifier import (
+    classify_database,
+    write_classification_outputs,
+)
 from nhtsa_metadata.services.scale_readiness import ScaleReadinessService
 from nhtsa_metadata.services.schema_audit import SchemaAuditService, report_to_dict
 from nhtsa_metadata.services.schema_optimization import SchemaOptimizationService
@@ -116,6 +120,11 @@ def catalog_collect_test(
     endpoint_set: Annotated[str, typer.Option("--endpoint-set")] = "all",
     paginate_instrumentation: Annotated[bool, typer.Option("--paginate-instrumentation")] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
+    retry_count: Annotated[int | None, typer.Option("--retry-count")] = None,
+    timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds")] = None,
 ) -> None:
     if endpoint_set != "all" or not paginate_instrumentation:
         console.print("Phase 5 fixture collect uses endpoint-set=all with pagination.")
@@ -126,7 +135,13 @@ def catalog_collect_test(
     session_factory = _session_factory_for_settings(settings)
     with session_factory() as session:
         result = CatalogBuilder(
-            session, source=source, allow_live=allow_live, settings=settings
+            session,
+            source=source,
+            allow_live=allow_live,
+            settings=settings,
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
+            rate_limit_delay_seconds=rate_limit_delay_seconds,
         ).collect_tests([test_no])
     console.print(json.dumps(result.__dict__, sort_keys=True))
 
@@ -138,6 +153,11 @@ def catalog_collect(
     source: Annotated[str, typer.Option("--source")] = "fixture",
     allow_live: Annotated[bool, typer.Option("--allow-live")] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
+    retry_count: Annotated[int | None, typer.Option("--retry-count")] = None,
+    timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds")] = None,
 ) -> None:
     if dry_run:
         console.print(json.dumps({"dry_run": True, "manifest": str(manifest)}, sort_keys=True))
@@ -146,7 +166,13 @@ def catalog_collect(
     session_factory = _session_factory_for_settings(settings)
     with session_factory() as session:
         result = CatalogBuilder(
-            session, source=source, allow_live=allow_live, settings=settings
+            session,
+            source=source,
+            allow_live=allow_live,
+            settings=settings,
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
+            rate_limit_delay_seconds=rate_limit_delay_seconds,
         ).collect_manifest(manifest)
     console.print(json.dumps(result.__dict__, sort_keys=True))
 
@@ -361,6 +387,11 @@ def catalog_backfill_endpoints(
     only_missing: Annotated[bool, typer.Option("--only-missing")] = False,
     min_test_date: Annotated[str | None, typer.Option("--min-test-date")] = None,
     output: Annotated[Path | None, typer.Option("--output")] = None,
+    rate_limit_delay_seconds: Annotated[
+        float | None, typer.Option("--rate-limit-delay-seconds")
+    ] = None,
+    retry_count: Annotated[int | None, typer.Option("--retry-count")] = None,
+    timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds")] = None,
 ) -> None:
     endpoint_names = [item.strip() for item in endpoints.split(",") if item.strip()]
     settings = _effective_settings(database_url)
@@ -373,6 +404,9 @@ def catalog_backfill_endpoints(
             allow_live=allow_live,
             settings=settings,
             min_test_date=_parse_date_option(min_test_date) or settings.min_test_date,
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
+            rate_limit_delay_seconds=rate_limit_delay_seconds,
         ).backfill(endpoints=endpoint_names, scope=scope, only_missing=only_missing)
     payload = result.__dict__
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
@@ -523,6 +557,42 @@ def schema_rebuild_code_values(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(encoded + "\n", encoding="utf-8")
     console.print(encoded)
+
+
+@schema_app.command("classify-v1-4")
+def schema_classify_v1_4(
+    rule_file: Annotated[Path, typer.Option("--rule-file")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
+    markdown_output: Annotated[Path | None, typer.Option("--markdown-output")] = None,
+    snapshot_source: Annotated[str, typer.Option("--snapshot-source")] = "sqlite_snapshot",
+    classification_version: Annotated[
+        str | None, typer.Option("--classification-version")
+    ] = None,
+) -> None:
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        payload = classify_database(
+            session,
+            rule_file=rule_file,
+            source_db=database_url or get_settings().database_url,
+            snapshot_source=snapshot_source,
+            classification_version=classification_version,
+        )
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2)
+    if output is not None and markdown_output is not None:
+        write_classification_outputs(payload, output=output, markdown_output=markdown_output)
+    elif output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n", encoding="utf-8")
+    elif markdown_output is not None:
+        raise typer.BadParameter("--markdown-output requires --output")
+    if output is not None:
+        console.print(json.dumps(payload["summary"], ensure_ascii=False, sort_keys=True))
+    else:
+        console.print(encoded)
+    if payload["summary"]["unclassified_count"] or payload["summary"]["known_false_positive_count"]:
+        raise typer.Exit(1)
 
 
 @schema_app.command("backlog-triage")

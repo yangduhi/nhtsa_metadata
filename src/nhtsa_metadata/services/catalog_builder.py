@@ -35,6 +35,9 @@ class CatalogBuilder:
         source: str = "fixture",
         allow_live: bool = False,
         settings: Settings | None = None,
+        timeout_seconds: float | None = None,
+        retry_count: int | None = None,
+        rate_limit_delay_seconds: float | None = None,
     ) -> None:
         if source == "live" and not allow_live:
             raise LiveAccessNotAllowedError("--source live requires --allow-live")
@@ -43,7 +46,13 @@ class CatalogBuilder:
         self.allow_live = allow_live
         self.settings = settings or get_settings()
         self.client = (
-            LiveNhtsaClient(self.settings, allow_live=allow_live)
+            LiveNhtsaClient(
+                self.settings,
+                allow_live=allow_live,
+                timeout_seconds=timeout_seconds,
+                retry_count=retry_count,
+                rate_limit_delay_seconds=rate_limit_delay_seconds,
+            )
             if source == "live"
             else FixtureNhtsaClient()
         )
@@ -111,10 +120,12 @@ class CatalogBuilder:
                         fetch_results, run_id=run.id, run_item_id=run_item.id
                     )
                 )
-                canonical_rows += self.ingestion.rebuild_test(test_no)
+                canonical_rows += self.ingestion.rebuild_test(test_no, rebuild_facets=False)
                 run_item.status = "succeeded"
                 run_item.finished_at = datetime.utcnow()
                 self.session.commit()
+            self.ingestion.read_model_builder.rebuild_facets()
+            self.session.commit()
         except Exception as exc:
             self.session.rollback()
             persisted_run = self.session.get(CollectionRun, run.id)

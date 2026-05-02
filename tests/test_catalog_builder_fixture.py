@@ -21,6 +21,7 @@ from nhtsa_metadata.db.session import (
 )
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.sources.nhtsa_crash.fixtures import FixtureNhtsaClient
+from nhtsa_metadata.sources.nhtsa_crash.live_client import LiveNhtsaClient
 
 
 def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]
@@ -100,6 +101,28 @@ def test_collection_run_records_requested_live_provenance_without_http(tmp_setti
         assert run.allow_live is True
         assert run.finished_at is not None
         assert run.database_url_sanitized == settings.database_url
+
+
+def test_live_catalog_builder_passes_request_policy_to_client(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    settings = tmp_settings.model_copy(update={"allow_live": True})
+    ensure_schema(create_engine_for_settings(settings))
+    session_factory = create_session_factory(settings)
+
+    with session_factory() as session:
+        builder = CatalogBuilder(
+            session,
+            source="live",
+            allow_live=True,
+            settings=settings,
+            timeout_seconds=31,
+            retry_count=4,
+            rate_limit_delay_seconds=0.2,
+        )
+
+    assert isinstance(builder.client, LiveNhtsaClient)
+    assert builder.client.timeout_seconds == 31
+    assert builder.client.retry_count == 4
+    assert builder.client.rate_limit_delay_seconds == 0.2
 
 
 def test_out_of_scope_legacy_collect_skips_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]
