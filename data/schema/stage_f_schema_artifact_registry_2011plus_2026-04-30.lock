@@ -85,10 +85,10 @@
       "sha256": "90842020ede31c87a663a4c85ac7517d3ae9ea6f96cff2a00f664936ec6ad92e"
     },
     {
-      "bytes": 67806,
+      "bytes": 67768,
       "path": "scripts/build_schema_contract_v1_5.py",
       "rows": "",
-      "sha256": "ab459bdcaf5b121e1432fb7305457f42cb7b8d0e98dcba5fa0057f673346eb0a"
+      "sha256": "c74c2869795879092ebd409d7474adbadb2f6c2c3c08df591d72267de6ba6c21"
     }
   ],
   "schema_version": "1.5",

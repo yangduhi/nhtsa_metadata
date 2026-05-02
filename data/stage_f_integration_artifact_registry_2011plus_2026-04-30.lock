@@ -16,9 +16,9 @@
   },
   "artifacts": [
     {
-      "bytes": 9219,
+      "bytes": 9418,
       "path": "docs/phase_reports/stage_f_integration_acceptance_2011plus_2026-04-30.md",
-      "sha256": "0245ef3b1798f591f134b971a78fc2494f9cbd6f41cc4827ea47770c721c4e50",
+      "sha256": "f50d462cdbfcffa0031e26e4c40bd3b477eb31a36eb259105a3f835b5f5a2e5c",
       "tracked_with_force": false
     },
     {
@@ -102,7 +102,7 @@
     {
       "bytes": 3341,
       "path": "data/schema/stage_f_schema_artifact_registry_2011plus_2026-04-30.lock",
-      "sha256": "b0680b9a8de0acfb3b08284504dd0af823c7223d682a064aa637c3307550d045",
+      "sha256": "52bbc2fbb7bc6942eddf6dae1f97afe3b1ad75df4ad068417d260d130806ae59",
       "tracked_with_force": true
     },
     {
@@ -142,15 +142,21 @@
       "tracked_with_force": false
     },
     {
-      "bytes": 67806,
+      "bytes": 67768,
       "path": "scripts/build_schema_contract_v1_5.py",
-      "sha256": "ab459bdcaf5b121e1432fb7305457f42cb7b8d0e98dcba5fa0057f673346eb0a",
+      "sha256": "c74c2869795879092ebd409d7474adbadb2f6c2c3c08df591d72267de6ba6c21",
       "tracked_with_force": false
     },
     {
       "bytes": 37516,
       "path": "scripts/classifier_v1_4_1_acceptance.py",
       "sha256": "ea94eeec85652628fed08fe823d7b70246d94346dce0f3ab11523854fe3d6062",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 1627,
+      "path": "scripts/verify.ps1",
+      "sha256": "088fd26c06942e681abb666087af723c2346f98bac9e0daf22313d76d4e27b04",
       "tracked_with_force": false
     },
     {
@@ -166,9 +172,9 @@
       "tracked_with_force": false
     },
     {
-      "bytes": 10059,
+      "bytes": 10219,
       "path": "tests/test_stage_f_integration_acceptance.py",
-      "sha256": "749a1d46f139c77dc3cb38955a8a3186a029c1862d9e0b5c8c7b8575be70910a",
+      "sha256": "2b45f076d0fb8f7ca46703f7b305d8a63c538e51319709c4735f1d5678200807",
       "tracked_with_force": false
     }
   ],
@@ -179,14 +185,22 @@
   "branches": {
     "classifier": {
       "branch": "origin/codex/stage-f-v141-targeted-rule-analysis",
-      "commit": "d4bab61d00fcedcfca4beadd8fcf03571258e17a"
+      "commit": "d4bab61d00fcedcfca4beadd8fcf03571258e17a",
+      "merge_commit": "9428c1c77bd83f2bdcc2c11b316d0e9ca14a2f87"
+    },
+    "hardening": {
+      "base_commit": "98ee326dcd3c5fc9057feab8409a49ff74f33787",
+      "branch": "codex/stage-f-integration-hardening"
     },
     "integration": {
-      "branch": "codex/stage-f-integration"
+      "adjustment_commit": "d80703c660c3eaf4dede6637979ea31b2eb0264e",
+      "branch": "codex/stage-f-integration",
+      "final_commit": "98ee326dcd3c5fc9057feab8409a49ff74f33787"
     },
     "schema": {
       "branch": "origin/codex/stage-f-schema-contract-v15",
-      "commit": "6a74b5d7c25887b607f8d0e24f8149002e0869a1"
+      "commit": "6a74b5d7c25887b607f8d0e24f8149002e0869a1",
+      "merge_commit": "7ab3ec812f7def3f14642f8db85159da550ba06d"
     }
   },
   "integration_version": "stage_f_schema_v1_5_classifier_v1_4_1",

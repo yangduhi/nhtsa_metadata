@@ -101,13 +101,16 @@ def test_stage_f_integration_artifacts_are_registered() -> None:
         "data/schema/code_values_v1_5.csv",
         "data/schema/relationship_matrix_v1_5.csv",
         "data/schema/schema_audit_v1_5.csv",
+        "data/schema/stage_f_schema_artifact_registry_2011plus_2026-04-30.lock",
         "data/classification/classification_gap_triage_v1_4_1.csv",
         "data/classification/known_false_positive_triage_v1_4_1.csv",
         "data/classification/classification_evidence_v1_4_1.csv",
         "data/classification/classification_summary_v1_4_1.csv",
         "data/classification/classification_acceptance_v1_4_1.csv",
         "migrations/0003_schema_contract_v1_5.sql",
+        "scripts/build_schema_contract_v1_5.py",
         "scripts/classifier_v1_4_1_acceptance.py",
+        "scripts/verify.ps1",
         "tests/test_stage_f_integration_acceptance.py",
     }
     registry = json.loads(INTEGRATION_REGISTRY.read_text(encoding="utf-8"))

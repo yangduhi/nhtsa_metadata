@@ -7,20 +7,24 @@
 - classifier commit: `d4bab61d00fcedcfca4beadd8fcf03571258e17a`
 - base branch: `origin/codex/stage-d-full-scale-2011plus-collect`
 - base commit: `9f7612c10ff85a7e92d7ec54f2416eafa342b36c`
-- schema merge commit: `7ab3ec8`
-- classifier merge commit: `9428c1c`
-- previous integration adjustment commit: `d80703c`
+- schema merge commit: `7ab3ec812f7def3f14642f8db85159da550ba06d`
+- classifier merge commit: `9428c1c77bd83f2bdcc2c11b316d0e9ca14a2f87`
+- integration adjustment commit: `d80703c660c3eaf4dede6637979ea31b2eb0264e`
+- final integration commit: `98ee326dcd3c5fc9057feab8409a49ff74f33787`
+- hardening branch: `codex/stage-f-integration-hardening`
 - source DB path: `D:\vscode\nhtsa_metadata_stage_d\data\full_2011plus_metadata_only_stage_d_2026-04-30.sqlite`
 - manifest path: `D:\vscode\nhtsa_metadata_stage_d\data\full_2011plus_authoritative_manifest.csv`
 - manifest SHA256: `b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be`
 
 ## 2. Git And Worktree Hygiene
-- worktree path: `D:\vscode\nhtsa_metadata_stage_f_integration`
+- integration worktree path: `D:\vscode\nhtsa_metadata_stage_f_integration`
+- hardening worktree path: `D:\vscode\nhtsa_metadata_stage_f_hardening`
 - branch: `codex/stage-f-integration`
 - main merge performed: false
 - source DB handling: read-only source input; source DB was not migrated or copied.
 - manifest handling: read-only source input; manifest was not modified.
-- large artifact policy: no .sqlite, .db, media, raw payload archive, or package download is part of the integration commit.
+- large artifact policy: no .sqlite, .db, media, raw payload archive, package download, or large binary artifact is part of the integration or hardening commit.
+- compatibility hygiene wording: no .sqlite, .db, media, raw payload archive, or package download is committed.
 - ignored data artifacts intentionally committed with -f: `data/schema/*.csv`, `data/schema/*.lock`, `data/classification/*.csv`, and `data/stage_f_integration_artifact_registry_2011plus_2026-04-30.lock`.
 
 ## 3. Schema Result Summary
@@ -102,12 +106,12 @@ Evidence coverage result:
 | `pytest tests/test_classifier_v1_4_1_acceptance.py -q` | passed, 5 tests | No live API. |
 | `pytest tests/test_stage_f_integration_acceptance.py -q` | passed, 5 tests | No live API. |
 | `pytest -q` | passed, 125 tests, 2 warnings | Existing `TestFilterSummary` PytestCollectionWarning warnings only. |
-| `ruff check src tests scripts` | failed | Existing `scripts/build_schema_contract_v1_5.py` import-order/line-length/unused-variable issues from the schema branch; not caused by the integration reconciliation. |
+| `ruff check src tests scripts` | passed | Hardening patch fixed `scripts/build_schema_contract_v1_5.py` lint-only issues without regenerating schema outputs. |
 | `ruff check src tests scripts\classifier_v1_4_1_acceptance.py` | passed | Covers integration test files, runtime source, and the modified classifier acceptance script. |
 | `ruff check src tests` | passed | Equivalent to the repo-local verify static check. |
 | `mypy src\nhtsa_metadata` | passed | 48 source files, no issues. |
-| `scripts\verify.ps1` | unavailable in this worktree | Failed before checks because `.venv\Scripts\python.exe` does not exist in `D:\vscode\nhtsa_metadata_stage_f_integration`; equivalent `ruff src tests`, `mypy`, and `pytest -q` commands were run with the Stage D virtualenv and passed. |
-| `.harness\run.ps1` | preflight completed but verify step emitted the same local venv error | The harness delegates to `scripts\verify.ps1`; acceptance relies on the direct equivalent commands above. |
+| `scripts\verify.ps1` | passed | Hardening patch allows `NHTSA_METADATA_VERIFY_PYTHON` when repo-local `.venv` is absent; executed with the Stage D virtualenv. |
+| `.harness\run.ps1` | passed | Harness delegates to `scripts\verify.ps1`; executed with the same explicit verification Python. |
 | `git diff --check` | passed | No whitespace errors. |
 
 ## 9. Final Conclusion
