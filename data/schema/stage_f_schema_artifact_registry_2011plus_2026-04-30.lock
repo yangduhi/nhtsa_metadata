@@ -1,0 +1,102 @@
+{
+  "artifacts": [
+    {
+      "bytes": 4288,
+      "path": "docs/schema/schema_contract_v1_5.md",
+      "rows": "",
+      "sha256": "251da1932d3b42485c17dcf032973cfaabae8d1f1cad2370a9a3fd42655b1a4e"
+    },
+    {
+      "bytes": 3219,
+      "path": "docs/schema/endpoint_entity_matrix_v1_5.md",
+      "rows": "",
+      "sha256": "0a085c53cc8daa9e94c4e792a67cd83e697c053ec35ebc836ad74b87f4fa0575"
+    },
+    {
+      "bytes": 1041,
+      "path": "docs/schema/field_catalog_v1_5.md",
+      "rows": "",
+      "sha256": "cfd767d2471185c0fc34846ca6501f3e3003a5dfd59fb2d487d3041d70ca24fa"
+    },
+    {
+      "bytes": 2996,
+      "path": "docs/schema/code_value_contract_v1_5.md",
+      "rows": "",
+      "sha256": "27d4fe5db18bf2a939e0fe4e392e900f188539e866053d10df7797bdc1c20856"
+    },
+    {
+      "bytes": 3568,
+      "path": "docs/schema/relationship_matrix_v1_5.md",
+      "rows": "",
+      "sha256": "538803f2da9e1d0df9504dd20744d6ee33016eda55168c67674e183b56acbd8c"
+    },
+    {
+      "bytes": 4082,
+      "path": "docs/phase_reports/stage_f_schema_contract_2011plus_2026-04-30.md",
+      "rows": "",
+      "sha256": "f3289166bf956eea8cc27753184511926ca63f08f9a12cc606c87a7519afa05b"
+    },
+    {
+      "bytes": 149078,
+      "path": "data/schema/field_catalog_v1_5.csv",
+      "rows": 468,
+      "sha256": "553f9fb24d168b31e9473d59d5531ede1c856c22c25bce8a173b98a2850ee0c3"
+    },
+    {
+      "bytes": 6333,
+      "path": "data/schema/endpoint_entity_matrix_v1_5.csv",
+      "rows": 21,
+      "sha256": "ffdbe4a1dcfff79d05776fbf0d5e6264cb900b4ed9faee0597d303fb492fc668"
+    },
+    {
+      "bytes": 2926,
+      "path": "data/schema/code_sets_v1_5.csv",
+      "rows": 17,
+      "sha256": "f343a0262234a03b8d88991f6e1da20aec4673ebc45e438d2660cc130de37864"
+    },
+    {
+      "bytes": 197390,
+      "path": "data/schema/code_values_v1_5.csv",
+      "rows": 757,
+      "sha256": "c9cfc5a5c7eeb147e1047abde0e76a3dab151dab56641947cc87ca8c28712024"
+    },
+    {
+      "bytes": 4405,
+      "path": "data/schema/relationship_matrix_v1_5.csv",
+      "rows": 26,
+      "sha256": "400a591324b45431a1005976b6c3a27af7649f4efabaa5de7fedec6cc72e0e4e"
+    },
+    {
+      "bytes": 2469,
+      "path": "data/schema/schema_audit_v1_5.csv",
+      "rows": 7,
+      "sha256": "c421cc6c5ab60d28006ee07ca0d702d66eb76f007e6e55bf1b24eed9f30289f2"
+    },
+    {
+      "bytes": 7900,
+      "path": "migrations/0003_schema_contract_v1_5.sql",
+      "rows": "",
+      "sha256": "269eecd25de200a821b74f18f53d72e7d77c95e5b85cb19c7c864ba17d0421de"
+    },
+    {
+      "bytes": 5956,
+      "path": "tests/test_schema_contract_v1_5.py",
+      "rows": "",
+      "sha256": "90842020ede31c87a663a4c85ac7517d3ae9ea6f96cff2a00f664936ec6ad92e"
+    },
+    {
+      "bytes": 67806,
+      "path": "scripts/build_schema_contract_v1_5.py",
+      "rows": "",
+      "sha256": "ab459bdcaf5b121e1432fb7305457f42cb7b8d0e98dcba5fa0057f673346eb0a"
+    }
+  ],
+  "schema_version": "1.5",
+  "source": {
+    "manifest_path": "D:\\vscode\\nhtsa_metadata_stage_d\\data\\full_2011plus_authoritative_manifest.csv",
+    "manifest_sha256": "b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be",
+    "source_db_path": "D:\\vscode\\nhtsa_metadata_stage_d\\data\\full_2011plus_metadata_only_stage_d_2026-04-30.sqlite",
+    "source_db_size_bytes": 2641743872,
+    "source_system": "nhtsa_crash"
+  }
+}
