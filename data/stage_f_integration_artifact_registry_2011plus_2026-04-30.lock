@@ -1,0 +1,205 @@
+{
+  "acceptance_conclusion": "ACCEPTED_WITH_DOCUMENTED_EXCEPTIONS: Stage F integration accepted with explicitly documented exceptions",
+  "artifact_policy": {
+    "forbidden_suffixes": [
+      ".sqlite",
+      ".db",
+      ".zip",
+      ".bin",
+      ".mp4",
+      ".avi",
+      ".mov"
+    ],
+    "large_artifacts_committed": false,
+    "media_or_package_downloads_committed": false,
+    "raw_payload_archives_committed": false
+  },
+  "artifacts": [
+    {
+      "bytes": 9219,
+      "path": "docs/phase_reports/stage_f_integration_acceptance_2011plus_2026-04-30.md",
+      "sha256": "0245ef3b1798f591f134b971a78fc2494f9cbd6f41cc4827ea47770c721c4e50",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 4082,
+      "path": "docs/phase_reports/stage_f_schema_contract_2011plus_2026-04-30.md",
+      "sha256": "f3289166bf956eea8cc27753184511926ca63f08f9a12cc606c87a7519afa05b",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 4363,
+      "path": "docs/phase_reports/stage_f_classification_acceptance_2011plus_2026-04-30.md",
+      "sha256": "6c1e3929a541de9a8edcd17ce5f4d7df9a51824221254c204599e1c98b24d823",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 4288,
+      "path": "docs/schema/schema_contract_v1_5.md",
+      "sha256": "251da1932d3b42485c17dcf032973cfaabae8d1f1cad2370a9a3fd42655b1a4e",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 3219,
+      "path": "docs/schema/endpoint_entity_matrix_v1_5.md",
+      "sha256": "0a085c53cc8daa9e94c4e792a67cd83e697c053ec35ebc836ad74b87f4fa0575",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 1041,
+      "path": "docs/schema/field_catalog_v1_5.md",
+      "sha256": "cfd767d2471185c0fc34846ca6501f3e3003a5dfd59fb2d487d3041d70ca24fa",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 2996,
+      "path": "docs/schema/code_value_contract_v1_5.md",
+      "sha256": "27d4fe5db18bf2a939e0fe4e392e900f188539e866053d10df7797bdc1c20856",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 3568,
+      "path": "docs/schema/relationship_matrix_v1_5.md",
+      "sha256": "538803f2da9e1d0df9504dd20744d6ee33016eda55168c67674e183b56acbd8c",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 148609,
+      "path": "data/schema/field_catalog_v1_5.csv",
+      "sha256": "1018a0af6220d085f219ed0454ea0d61f5bfc5f9c746f3297ac07e8e06e36e01",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 6311,
+      "path": "data/schema/endpoint_entity_matrix_v1_5.csv",
+      "sha256": "d034c4f8a08ed07374cd53df64e0174c0ece236d73119382e6735976f48a0312",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 2908,
+      "path": "data/schema/code_sets_v1_5.csv",
+      "sha256": "d6ebd1d3fb1ee6cb2ddd60b562a018b378dc41c66399baa680c3f0bd6b65305c",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 196632,
+      "path": "data/schema/code_values_v1_5.csv",
+      "sha256": "24e2403831e6f4f0344e371df9dec4bca7c7043020815db2cfd323f635f37bee",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 4378,
+      "path": "data/schema/relationship_matrix_v1_5.csv",
+      "sha256": "6e066b6d7397f5ef135cb176bc83b824abc412793df0a04ded331d51a4a0bf55",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 2461,
+      "path": "data/schema/schema_audit_v1_5.csv",
+      "sha256": "5ba443c52cb5afbc6582e49092ed2876cbfd906d3d292d1c366b175b0cb837f6",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 3341,
+      "path": "data/schema/stage_f_schema_artifact_registry_2011plus_2026-04-30.lock",
+      "sha256": "b0680b9a8de0acfb3b08284504dd0af823c7223d682a064aa637c3307550d045",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 42185,
+      "path": "data/classification/classification_gap_triage_v1_4_1.csv",
+      "sha256": "2d7aa9cb7a41bf33b6d4d9c33301c5233b8cd731aa55b7cf2d4908a18291b026",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 20415,
+      "path": "data/classification/known_false_positive_triage_v1_4_1.csv",
+      "sha256": "ac8ba3116e915c646c2d68b6f2894999719db5adef6e133863427313f8d9e455",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 3828831,
+      "path": "data/classification/classification_evidence_v1_4_1.csv",
+      "sha256": "ec414b931057764cc22fcdfdb7a2df0f313f8457cf0c478a9c7d1946a98d5d13",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 897,
+      "path": "data/classification/classification_summary_v1_4_1.csv",
+      "sha256": "a170b7d36ebe44e9e22b2df8ebba4e8d0e99419e68869b4f2872ccafd89041c4",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 1049,
+      "path": "data/classification/classification_acceptance_v1_4_1.csv",
+      "sha256": "a25cf72da375e07c3e9a1f38f2a3e3f16e56ea91370abb93ce730e5c518810fb",
+      "tracked_with_force": true
+    },
+    {
+      "bytes": 7900,
+      "path": "migrations/0003_schema_contract_v1_5.sql",
+      "sha256": "269eecd25de200a821b74f18f53d72e7d77c95e5b85cb19c7c864ba17d0421de",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 67806,
+      "path": "scripts/build_schema_contract_v1_5.py",
+      "sha256": "ab459bdcaf5b121e1432fb7305457f42cb7b8d0e98dcba5fa0057f673346eb0a",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 37516,
+      "path": "scripts/classifier_v1_4_1_acceptance.py",
+      "sha256": "ea94eeec85652628fed08fe823d7b70246d94346dce0f3ab11523854fe3d6062",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 5956,
+      "path": "tests/test_schema_contract_v1_5.py",
+      "sha256": "90842020ede31c87a663a4c85ac7517d3ae9ea6f96cff2a00f664936ec6ad92e",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 3404,
+      "path": "tests/test_classifier_v1_4_1_acceptance.py",
+      "sha256": "adcbe38428607da23c96190ddc1f476a48268f5495ac8453a9ac4598d12b31b9",
+      "tracked_with_force": false
+    },
+    {
+      "bytes": 10059,
+      "path": "tests/test_stage_f_integration_acceptance.py",
+      "sha256": "749a1d46f139c77dc3cb38955a8a3186a029c1862d9e0b5c8c7b8575be70910a",
+      "tracked_with_force": false
+    }
+  ],
+  "base": {
+    "branch": "origin/codex/stage-d-full-scale-2011plus-collect",
+    "commit": "9f7612c10ff85a7e92d7ec54f2416eafa342b36c"
+  },
+  "branches": {
+    "classifier": {
+      "branch": "origin/codex/stage-f-v141-targeted-rule-analysis",
+      "commit": "d4bab61d00fcedcfca4beadd8fcf03571258e17a"
+    },
+    "integration": {
+      "branch": "codex/stage-f-integration"
+    },
+    "schema": {
+      "branch": "origin/codex/stage-f-schema-contract-v15",
+      "commit": "6a74b5d7c25887b607f8d0e24f8149002e0869a1"
+    }
+  },
+  "integration_version": "stage_f_schema_v1_5_classifier_v1_4_1",
+  "source": {
+    "code_sets": 17,
+    "code_values": 757,
+    "collected_tests": 3891,
+    "manifest_path": "D:/vscode/nhtsa_metadata_stage_d/data/full_2011plus_authoritative_manifest.csv",
+    "manifest_rows": 3891,
+    "manifest_sha256": "b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be",
+    "missing_tests": 0,
+    "payload_observations": 66318,
+    "source_db_path": "D:/vscode/nhtsa_metadata_stage_d/data/full_2011plus_metadata_only_stage_d_2026-04-30.sqlite",
+    "source_payloads": 66318
+  }
+}

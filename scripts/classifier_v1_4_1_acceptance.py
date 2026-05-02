@@ -151,17 +151,20 @@ def main() -> None:
         _acceptance_report(baseline, v141, summary_rows, acceptance_rows),
     )
 
+    conclusion = _acceptance_conclusion(acceptance_rows)
     print(
         json.dumps(
             {
                 "gap_triage_rows": len(gap_rows),
                 "known_false_positive_triage_rows": len(false_positive_rows),
                 "evidence_rows": len(evidence_rows),
-                "acceptance": _acceptance_conclusion(acceptance_rows),
+                "acceptance": conclusion,
             },
             sort_keys=True,
         )
     )
+    if not conclusion.startswith("ACCEPTED"):
+        raise SystemExit(1)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -661,7 +664,8 @@ def _acceptance_report(
             "",
             "## 9. tests executed",
             "- v1.4 baseline full corpus classification: reproduced expected failure and wrote baseline JSON/Markdown.",
-            "- v1.4.1 full corpus classification: completed with known false-positive hard cases at 0; CLI exit remained non-zero because 47 rows are still intentionally unclassified for adjudication.",
+            "- v1.4.1 legacy full corpus classification CLI: completed with known false-positive hard cases at 0; its non-zero exit remains legacy hard-fail behavior because 47 rows are still intentionally unclassified for adjudication.",
+            "- authoritative v1.4.1 acceptance signal: this acceptance generator returns exit 0 only when all hard acceptance rows pass; adjudicated unclassified rows are not hard failures in v1.4.1 acceptance mode.",
             "- acceptance report generator: generated all Stage F CSV and Markdown artifacts.",
             "- `pytest tests/test_classifier_v1_4_1_acceptance.py -q`: 5 passed.",
             "- `pytest tests/test_rule_classifier.py -q`: 4 passed.",
@@ -670,7 +674,12 @@ def _acceptance_report(
             "- `mypy src\\nhtsa_metadata`: passed.",
             "- `scripts\\verify.ps1`: not run because this throwaway worktree has no local `.venv`; equivalent default ruff/mypy/pytest checks were run with the existing Stage D virtualenv.",
             "",
-            "## 10. hard acceptance result",
+            "## 10. exit semantics",
+            "- v1.4 baseline behavior remains hard-fail when the original 47 unclassified rows and 26 known false-positive rows are present.",
+            "- v1.4.1 acceptance behavior is authoritative through `scripts/classifier_v1_4_1_acceptance.py` and `tests/test_classifier_v1_4_1_acceptance.py`.",
+            "- The legacy full-corpus classification CLI exit 1 is retained only as a non-authoritative signal for unresolved generic unclassified output; it does not override the v1.4.1 acceptance CSV/test result.",
+            "",
+            "## 11. hard acceptance result",
             "",
             "| check | expected | actual | status |",
             "|---|---|---|---|",
