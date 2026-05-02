@@ -24,6 +24,20 @@ from nhtsa_metadata.db.models import (
 )
 
 GENERIC_LEVELS = {"generic_physical_mode", "generic_fallback", "research_fallback"}
+FULL_VEHICLE_CRASH_MODES = {
+    "FRONT_FULL_WIDTH_FIXED_RIGID_BARRIER",
+    "FRONT_FIXED_COLLISION_BARRIER_ANGLE_ALLOWED",
+    "SIDE_MOVING_DEFORMABLE_BARRIER",
+    "SIDE_RIGID_POLE",
+    "REAR_MOVING_DEFORMABLE_BARRIER",
+    "REAR_MOVING_FLAT_OR_CONTOURED_BARRIER",
+    "FRONT_OFFSET_DEFORMABLE_BARRIER",
+    "FRONT_OBLIQUE_MOVING_DEFORMABLE_BARRIER",
+    "SIDE_OBLIQUE_RIGID_POLE",
+    "REAR_IMPACT_RESEARCH",
+    "VEHICLE_TO_VEHICLE_RESEARCH",
+    "SIDE_POLE_RESEARCH",
+}
 
 
 @dataclass(frozen=True)
@@ -403,6 +417,8 @@ def _matches_rule(record: FeatureRecord, rule: dict[str, Any]) -> tuple[bool, di
     hit_forbidden = [term for term in forbidden if _contains(record.text, term)]
     if hit_forbidden:
         return False, {}
+    if _negative_disambiguation_rejects(record, rule):
+        return False, {}
     if not _required_any(record.text, match.get("required_text_any"), evidence, "text_any"):
         return False, {}
     if not _required_all(record.text, match.get("required_text_all"), evidence, "text_all"):
@@ -443,6 +459,42 @@ def _matches_rule(record: FeatureRecord, rule: dict[str, Any]) -> tuple[bool, di
     ):
         return False, {}
     return True, evidence
+
+
+def _negative_disambiguation_rejects(record: FeatureRecord, rule: dict[str, Any]) -> bool:
+    physical_mode = str(rule.get("physical_mode") or "").upper()
+    rule_id = str(rule.get("rule_id") or "")
+    if _is_sled_record(record) and physical_mode in FULL_VEHICLE_CRASH_MODES:
+        return True
+    if rule_id == "US_NCAP_SIDE_POLE_20MPH_75DEG_25CM":
+        return not _has_ncap_side_pole_confirmation(record)
+    return False
+
+
+def _is_sled_record(record: FeatureRecord) -> bool:
+    return _contains(record.test_configuration_text, "SLED") or _contains(record.text, "SLED")
+
+
+def _has_ncap_side_pole_confirmation(record: FeatureRecord) -> bool:
+    core_text = _normalize(
+        " ".join(
+            _safe(record.raw.get(key))
+            for key in ("test_type", "test_configuration", "contractor_study_title")
+        )
+    )
+    has_ncap_program = _contains_any(
+        core_text,
+        ["NCAP", "NEW CAR ASSESSMENT", "5 STAR", "5-STAR", "SAFETY RATINGS"],
+    )
+    has_pole_config = _contains_any(
+        core_text,
+        ["VEHICLE INTO POLE", "SIDE POLE", "POLE BARRIER", "RIGID POLE"],
+    )
+    has_component_negative = _contains_any(
+        core_text,
+        ["SLED", "OUT OF POSITION", "STATIC AIR BAG", "STATIC AIRBAG"],
+    )
+    return has_ncap_program and has_pole_config and not has_component_negative
 
 
 def _required_any(
