@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E501, I001
+
 import argparse
 import csv
 import hashlib
@@ -475,7 +477,6 @@ def build_field_catalog_rows(context: dict[str, Any]) -> list[dict[str, Any]]:
         source_meta = source_field_catalog.get((endpoint_name, json_path), {})
         code_set_name = FIELD_CODE_OVERRIDES.get((endpoint_name, json_path), "")
         mapped_table = source_meta.get("mapped_table") or ""
-        mapped_column = source_meta.get("mapped_column") or ""
         entity_type = mapped_table or first_entity_type(endpoint_name)
         raw_field_name = raw_field_from_path(json_path)
         normalized_field_name = normalize_name(raw_field_name)
