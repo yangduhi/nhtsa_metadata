@@ -1,4 +1,4 @@
-# Stage H to v1.0 Completion Goal Prompt
+# Stage H to v1.0 Continuous Completion Goal Prompt
 
 ```text
 /goal
@@ -15,6 +15,45 @@ Execution mode:
 - Live NHTSA API calls are not allowed.
 - Production data rewrite is not allowed.
 
+Important execution rule:
+Proceed continuously through Stage H, Stage I, Stage J, and v1.0 release-readiness without asking for user approval between stages.
+
+Treat each stage boundary as an internal validation gate, not as a user-approval gate.
+
+For each stage:
+1. Implement the required stage work.
+2. Run the required validation commands.
+3. Fix any in-scope validation failures.
+4. Rerun validation until the stage gate passes or a hard blocker is reached.
+5. Commit the completed stage locally with the specified commit message.
+6. Record the stage result.
+7. Automatically continue to the next stage if the gate passes.
+
+Stage progression:
+- After Stage H passes its gate and is committed, continue automatically to Stage I.
+- After Stage I passes its gate and is committed, continue automatically to Stage J.
+- After Stage J passes its gate and is committed, continue automatically to the v1.0 release-readiness report.
+- After the v1.0 release-readiness report is complete and validation is acceptable, create the final local release-readiness commit.
+
+Do not pause to request approval between Stage H, Stage I, Stage J, or v1.0 release-readiness.
+
+Stop only if a hard blocker is reached, including:
+- working tree ambiguity that cannot be safely resolved
+- missing required artifact
+- validation failure that cannot be fixed within the current stage scope
+- migration conflict that cannot be safely resolved
+- work would require live NHTSA API calls
+- work would require forcing metadata gaps, out-of-scope rows, or source payload anomalies into canonical labels
+- work would require creating a new worktree, new repo folder, sibling repo folder, or clone
+- work would require push or merge to main
+- work would violate the project guardrails
+
+If a hard blocker is reached:
+- stop immediately
+- do not continue to the next stage
+- do not ask for approval to bypass the blocker
+- document the blocker, attempted fixes, validation state, and recommended next command
+
 Mandatory workspace constraint:
 - Work only in:
   D:\vscode\nhtsa_metadata
@@ -25,6 +64,8 @@ Mandatory workspace constraint:
 - Do not clone this repository.
 - If branch isolation is needed, use branches only inside the current repository directory.
 - If the current working tree is dirty and cannot be safely committed, stop and report instead of creating a new worktree.
+- Creating ordinary files inside the existing repository for required reports, tests, migrations, fixtures, or work-order documents is allowed.
+- Creating a new external project/worktree/repo folder is not allowed.
 
 Starting point:
 - Current directory:
@@ -33,6 +74,8 @@ Starting point:
   codex/stage-g-schema-classifier-integration
 - Stage G is implementation-complete.
 - Stage H can start.
+- The canonical repository has only one registered worktree.
+- The repository-level AGENTS.md includes a workspace policy that forbids new worktrees, sibling repo folders, git worktree add, and cloning this repository into another local folder.
 
 Project completion definition:
 Do not define completion as:
@@ -104,6 +147,17 @@ Preflight:
    - docs/phase_reports/stage_h_classification_disposition_schema_plan.md
    - docs/phase_reports/stage_i_targeted_canonical_expansion_plan.md
    - docs/phase_reports/stage_j_schema_v1_6_evidence_model_plan.md
+   - nhtsa_metadata_codex_work_orders/stage_h_to_v1_completion_goal_prompt.md, if present
+4. Run baseline validation before creating a new branch or making changes:
+   - pytest -q
+   - ruff check .
+   - mypy src\nhtsa_metadata
+   - powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+   - powershell -ExecutionPolicy Bypass -File .harness\run.ps1
+5. If baseline validation fails before any new work:
+   - stop
+   - do not continue to Stage H
+   - document the failure and whether it is pre-existing
 
 Branch policy:
 - You may create a local branch in the current directory only if the working tree is clean.
@@ -112,6 +166,8 @@ Branch policy:
 - Do not create a worktree for this branch.
 - Do not push.
 - Do not merge to main.
+- If branch creation is unnecessary because the current branch is already the intended integration branch, you may continue on the current branch.
+- If the current branch is not suitable and branch switching would risk overwriting changes, stop and report.
 
 Stage H objective:
 Implement classification/disposition schema separation.
@@ -146,21 +202,27 @@ disposition_status:
    - true_metadata_gap = 11
    - out_of_scope_for_current_taxonomy = 6
    - source_payload_anomaly = 2
-5. Add tests.
-6. Add or update report:
+5. Ensure accounted_for_count can be reported separately from canonical_label_classified_count.
+6. Ensure unadjudicated_count can be measured.
+7. Add or update tests.
+8. Add or update report:
    docs/phase_reports/stage_h_classification_disposition_schema_result.md
-7. Validate.
-8. Commit locally with:
-   stage-h: implement classification disposition schema baseline
+9. Validate.
+10. Commit locally with:
+    stage-h: implement classification disposition schema baseline
 
 Stage H success criteria:
 - classification_status and disposition_status are separate.
 - accounted_for_count can be reported separately from canonical_label_classified_count.
 - unadjudicated_count can be measured.
 - 47-row triage can be represented.
+- true_metadata_gap, out_of_scope_for_current_taxonomy, and source_payload_anomaly remain noncanonical final disposition categories.
 - pytest -q passes.
 - ruff check . passes.
 - mypy src\nhtsa_metadata passes.
+- scripts\verify.ps1 passes, unless an environment-only blocker is documented.
+- .harness\run.ps1 passes, unless an environment-only blocker is documented.
+- Stage H local commit is created.
 
 Stage I objective:
 Implement v1.4.2 targeted canonical expansion for only the 28 requires_new_canonical_label rows.
@@ -171,12 +233,13 @@ Required Stage I work:
 3. Do not force out_of_scope_for_current_taxonomy rows into canonical labels.
 4. Do not force source_payload_anomaly rows into canonical labels.
 5. Preserve known_false_positive_count = 0.
-6. Add false-positive regression tests.
-7. Add fallback/generic regression checks.
-8. Add or update report:
+6. Preserve accounted_for_count = 3891.
+7. Add false-positive regression tests.
+8. Add fallback/generic regression checks.
+9. Add or update report:
    docs/phase_reports/stage_i_v1_4_2_targeted_canonical_expansion_result.md
-9. Validate.
-10. Commit locally with:
+10. Validate.
+11. Commit locally with:
     stage-i: add targeted canonical expansion v1.4.2
 
 Stage I success criteria:
@@ -185,9 +248,17 @@ Stage I success criteria:
 - unadjudicated_count = 0
 - known_false_positive_count = 0
 - accounted_for_count = 3891
+- requires_new_canonical_label = 0, if all 28 target rows are successfully absorbed
+- true_metadata_gap = 11 remains noncanonical final disposition
+- out_of_scope_for_current_taxonomy = 6 remains noncanonical final disposition
+- source_payload_anomaly = 2 remains noncanonical final disposition
+- no fallback/generic regression is introduced, unless explicitly documented and justified
 - pytest -q passes.
 - ruff check . passes.
 - mypy src\nhtsa_metadata passes.
+- scripts\verify.ps1 passes, unless an environment-only blocker is documented.
+- .harness\run.ps1 passes, unless an environment-only blocker is documented.
+- Stage I local commit is created.
 
 Stage J objective:
 Implement schema v1.6 evidence-lineage operating model.
@@ -207,8 +278,8 @@ Required Stage J work:
    - impact_device_evidence
    - restraint_equipment_evidence
    - classification_feature_evidence
-3. Add tests.
-4. Add migration if needed.
+3. Add or update migration if needed.
+4. Add or update tests.
 5. Add or update report:
    docs/phase_reports/stage_j_schema_v1_6_evidence_model_result.md
 6. Validate.
@@ -216,13 +287,17 @@ Required Stage J work:
    stage-j: implement schema v1.6 evidence lineage model
 
 Stage J success criteria:
-- evidence lineage is traceable.
+- evidence lineage is traceable from source payload to normalized feature to candidate rule to final classification or final disposition.
 - canonical classification and noncanonical final disposition both have evidence surfaces.
+- classification_evidence semantics remain distinct from classifier runtime evidence and CSV fixtures.
 - schema hard failures are zero or documented non-blocking.
 - migration conflict = 0.
 - pytest -q passes.
 - ruff check . passes.
 - mypy src\nhtsa_metadata passes.
+- scripts\verify.ps1 passes, unless an environment-only blocker is documented.
+- .harness\run.ps1 passes, unless an environment-only blocker is documented.
+- Stage J local commit is created.
 
 Final v1.0 release-readiness objective:
 Create final release-readiness report.
@@ -243,34 +318,75 @@ The report must include:
    - not ready for main merge
    - ready with documented exceptions
 
+Final v1.0 completion gates:
+- total_count = 3891
+- accounted_for_count = 3891
+- known_false_positive_count = 0
+- unadjudicated_count = 0
+- schema_contract_hard_failure = 0
+- endpoint_matrix_hard_failure = 0
+- source_payload_immutability = pass
+- migration_conflict = 0
+- canonical_label_classified_count and adjudicated_noncanonical_count are reported separately
+- every row has traceable canonical classification evidence OR traceable final noncanonical disposition evidence
+- true_metadata_gap, out_of_scope_for_current_taxonomy, and source_payload_anomaly are not forced into canonical labels
+- pytest -q passes
+- ruff check . passes
+- mypy src\nhtsa_metadata passes
+- scripts\verify.ps1 passes, unless an environment-only blocker is documented
+- .harness\run.ps1 passes, unless an environment-only blocker is documented
+- no new worktree was created
+- no push occurred
+- no merge to main occurred
+- no live NHTSA API call occurred
+- no production/raw payload rewrite occurred
+
 Final validation:
 Run:
 - git status -sb
+- git worktree list --porcelain
 - pytest -q
 - ruff check .
 - mypy src\nhtsa_metadata
-
-If appropriate and environment supports it:
 - powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 - powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 
 Do not fabricate pass results.
-If verify.ps1 or harness cannot run due to .venv environment assumptions, report that explicitly.
+If verify.ps1 or harness cannot run due to environment assumptions, report that explicitly.
 
 Final commit:
 If v1.0 release-readiness report is complete and validation is acceptable, commit locally with:
 
   docs: add v1.0 release readiness report
 
+Do not push.
+Do not merge to main.
+
 Stop rules:
-Stop if:
-1. working tree becomes ambiguous
-2. a validation blocker appears
+Stop only if:
+1. working tree becomes ambiguous and cannot be safely resolved
+2. a validation blocker cannot be fixed within the current stage scope
 3. a required artifact is missing
 4. a migration conflict cannot be safely resolved
 5. implementing the next stage would require live API calls
-6. implementing the next stage would require forcing metadata gaps into canonical labels
-7. a new worktree or new repo folder would be required
+6. implementing the next stage would require forcing metadata gaps, out-of-scope rows, or source payload anomalies into canonical labels
+7. a new worktree, new repo folder, sibling repo folder, or clone would be required
+8. push would be required
+9. merge to main would be required
+10. a project guardrail would be violated
+
+If a stop rule is triggered:
+- stop immediately
+- do not continue to the next stage
+- do not request approval to bypass the blocker
+- write or update the relevant phase report with:
+  - blocker summary
+  - attempted fixes
+  - current validation state
+  - files changed
+  - recommended next command
+- commit the blocker report locally only if it is safe and directly useful
+- do not push
 
 Final response format:
 Return exactly these sections:
@@ -288,5 +404,7 @@ Return exactly these sections:
 11. Whether v1.0 completion target is reached
 12. Whether main merge is recommended
 13. Whether any hard constraint was violated
-14. Recommended next command
+14. Whether any new worktree/repo folder was created
+15. Final git status
+16. Recommended next command
 ```
