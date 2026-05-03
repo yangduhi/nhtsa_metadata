@@ -88,7 +88,11 @@ def main() -> None:
     parser.add_argument("--v141-json", type=Path, required=True)
     parser.add_argument("--source-db", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, default=Path("data/classification"))
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("tests/fixtures/classification"),
+    )
     parser.add_argument("--reports-dir", type=Path, default=Path("docs/phase_reports"))
     args = parser.parse_args()
 
@@ -561,11 +565,11 @@ def _analysis_report(
         "",
         "## 3. 47 unclassified triage summary",
         _counter_bullets(gap_counts),
-        "- Full row-level triage: `data/classification/classification_gap_triage_v1_4_1.csv`.",
+        "- Full row-level triage: `tests/fixtures/classification/classification_gap_triage_v1_4_1.csv`.",
         "",
         "## 4. 26 false-positive triage summary",
         _counter_bullets(fp_counts),
-        "- Full row-level triage: `data/classification/known_false_positive_triage_v1_4_1.csv`.",
+        "- Full row-level triage: `tests/fixtures/classification/known_false_positive_triage_v1_4_1.csv`.",
         "",
         "## 5. side pole over-confirmed root cause",
         "- v1.4 allowed weak side-pole text and inferred pole barrier evidence to confirm NCAP side pole without core NCAP/New Car Assessment evidence.",

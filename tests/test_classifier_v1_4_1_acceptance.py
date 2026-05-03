@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-DATA_DIR = Path("data/classification")
+DATA_DIR = Path("tests/fixtures/classification")
 ALLOWED_GAP_RESOLUTIONS = {
     "classified_by_specific_rule",
     "classified_by_negative_disambiguation",

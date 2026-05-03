@@ -23,12 +23,12 @@
 - requires_new_canonical_label: 28
 - source_payload_anomaly: 2
 - true_metadata_gap: 11
-- Full row-level triage: `data/classification/classification_gap_triage_v1_4_1.csv`.
+- Full row-level triage: `tests/fixtures/classification/classification_gap_triage_v1_4_1.csv`.
 
 ## 4. 26 false-positive triage summary
 - side_pole_over_confirmed: 8
 - sled_full_vehicle_false_positive: 18
-- Full row-level triage: `data/classification/known_false_positive_triage_v1_4_1.csv`.
+- Full row-level triage: `tests/fixtures/classification/known_false_positive_triage_v1_4_1.csv`.
 
 ## 5. side pole over-confirmed root cause
 - v1.4 allowed weak side-pole text and inferred pole barrier evidence to confirm NCAP side pole without core NCAP/New Car Assessment evidence.
