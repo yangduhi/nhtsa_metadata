@@ -3890,3 +3890,12 @@ nhtsa_crash_test:15507,15507,1.4.2,true,true,true,true,complete,classified,US_NC
 nhtsa_crash_test:15508,15508,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_POLE_20MPH_75DEG_25CM,canonical_label_assigned
 nhtsa_crash_test:15509,15509,1.4.2,true,true,true,true,complete,classified,US_NCAP_FRONTAL_FULL_WIDTH_RIGID_BARRIER_35MPH,canonical_label_assigned
 nhtsa_crash_test:15513,15513,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_BARRIER_MDB_38_5MPH_3015LB,canonical_label_assigned
+nhtsa_crash_test:15517,15517,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_POLE_20MPH_75DEG_25CM,canonical_label_assigned
+nhtsa_crash_test:15518,15518,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_BARRIER_MDB_38_5MPH_3015LB,canonical_label_assigned
+nhtsa_crash_test:15519,15519,1.4.2,true,true,true,true,complete,classified,US_NCAP_FRONTAL_FULL_WIDTH_RIGID_BARRIER_35MPH,canonical_label_assigned
+nhtsa_crash_test:15528,15528,1.4.2,true,true,true,true,complete,classified,US_NCAP_FRONTAL_FULL_WIDTH_RIGID_BARRIER_35MPH,canonical_label_assigned
+nhtsa_crash_test:15531,15531,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_POLE_20MPH_75DEG_25CM,canonical_label_assigned
+nhtsa_crash_test:15532,15532,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_BARRIER_MDB_38_5MPH_3015LB,canonical_label_assigned
+nhtsa_crash_test:15534,15534,1.4.2,true,true,true,true,complete,classified,US_NCAP_FRONTAL_FULL_WIDTH_RIGID_BARRIER_35MPH,canonical_label_assigned
+nhtsa_crash_test:15539,15539,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_BARRIER_MDB_38_5MPH_3015LB,canonical_label_assigned
+nhtsa_crash_test:15540,15540,1.4.2,true,true,true,true,complete,classified,US_NCAP_SIDE_POLE_20MPH_75DEG_25CM,canonical_label_assigned

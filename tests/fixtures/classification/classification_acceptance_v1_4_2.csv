@@ -1,14 +1,15 @@
 check,expected,actual,status,note
-total_count,3891,3891,pass,all rows retained
-canonical_label_classified_count,3872,3872,pass,28 target rows absorbed
+total_count,3900,3900,pass,all refreshed rows retained
+canonical_label_classified_count,3881,3881,pass,28 target rows plus 9 Stage K rows absorbed
 adjudicated_noncanonical_count,19,19,pass,noncanonical rows preserved
 unadjudicated_count,0,0,pass,no manual-review gap
 known_false_positive_count,0,0,pass,v1.4.1 hardening preserved
-accounted_for_count,3891,3891,pass,canonical plus final disposition
+accounted_for_count,3900,3900,pass,canonical plus final disposition
 requires_new_canonical_label,0,0,pass,targeted rows absorbed
 true_metadata_gap,11,11,pass,not forced into canonical labels
 out_of_scope_for_current_taxonomy,6,6,pass,not forced into canonical labels
 source_payload_anomaly,2,2,pass,not forced into canonical labels
 target_absorbed_rows,28,28,pass,requires_new only
+stage_k_appended_rows,9,9,pass,latest refresh rows promoted
 fallback_used_count,<= 845,845,pass,no regression
 generic_used_count,<= 565,565,pass,no regression

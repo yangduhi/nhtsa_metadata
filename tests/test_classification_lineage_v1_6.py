@@ -37,12 +37,12 @@ def test_schema_v1_6_fixture_lineage_is_complete_for_all_accounted_rows() -> Non
     audit_rows = read_lineage_audit(FIXTURE_DIR / "classification_lineage_audit_v1_6.csv")
     metrics = compute_lineage_metrics(audit_rows)
 
-    assert metrics.total_count == 3891
-    assert metrics.source_payload_linked_count == 3891
-    assert metrics.normalized_feature_linked_count == 3891
-    assert metrics.candidate_or_disposition_linked_count == 3891
-    assert metrics.final_decision_linked_count == 3891
-    assert metrics.complete_lineage_count == 3891
+    assert metrics.total_count == 3900
+    assert metrics.source_payload_linked_count == 3900
+    assert metrics.normalized_feature_linked_count == 3900
+    assert metrics.candidate_or_disposition_linked_count == 3900
+    assert metrics.final_decision_linked_count == 3900
+    assert metrics.complete_lineage_count == 3900
     assert metrics.missing_lineage_count == 0
 
 
