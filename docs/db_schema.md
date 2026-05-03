@@ -38,7 +38,7 @@ source of truth.
 |---|---|---|---|---|
 | `tests` | derived | One in-scope crash test. | `test_no` unique; `test_date >= 2011-01-01`. | Has lineage columns and is rebuildable from summary/detail/export payloads. |
 | `test_participants` | derived | Subject vehicle, impactor vehicle, or barrier participant. | `test_id`, `participant_kind`, source vehicle/barrier identity. | Preserves source row and participant classification reason. |
-| `vehicles` | derived | Canonical vehicle row. | `test_id`, `source_vehicle_no`, `source_row_hash`. | Raw vehicle details remain in `raw_row_json`; repeated observations attach through `canonical_row_sources`. |
+| `vehicles` | derived | Canonical vehicle row, including make/model/year, body type, speed, weight, length, width, wheelbase, and crush distance fields. | `test_id`, `source_vehicle_no`, `source_row_hash`. | Raw vehicle details remain in `raw_row_json`; repeated observations attach through `canonical_row_sources`. |
 | `barriers` | derived | Semantic-deduped barrier. | `test_id`, `source_row_hash`; semantic audit dedupes metadata_export/detail duplicates. | Barrier empty endpoint is allowed when source returns successful empty payload. |
 | `occupants` | derived | Normalized occupant slot. | `test_id`, `source_vehicle_no`, `occupant_location_raw`, `source_row_hash`. | Source observations attach through `canonical_row_sources`; read models use normalized slots. |
 | `restraints` | derived | Occupant-context restraint assignment. | `test_id`, `restraint_subject_kind`, `restraint_subject_semantic_hash`, `semantic_hash`. | Must keep occupant or subject context; repeated source observations attach through `canonical_row_sources`. |
@@ -56,7 +56,7 @@ All canonical tables derived from source rows use lineage columns where applicab
 
 | Table | Source of truth | Meaning | Key / rebuild policy |
 |---|---|---|---|
-| `test_filter_summary` | derived | One-row-per-test filter summary. | `test_id` and `test_no` unique; rebuildable. |
+| `test_filter_summary` | derived | One-row-per-test filter summary, including vehicle spec min/max fields and load-cell barrier flag. | `test_id` and `test_no` unique; rebuildable. |
 | `test_classification` | derived | Crash family / impact direction / counterparty classification. | `test_id` and `test_no` unique; unknown must be audited. |
 | `test_facets` | derived | Global facet values and counts. | Unique `(facet_name, facet_value)`; absent `dummy_type` is accepted warning when no stable value is observed. |
 | `asset_summary` | derived | Per-test asset kind counts. | Unique `(test_id, asset_kind)`. |

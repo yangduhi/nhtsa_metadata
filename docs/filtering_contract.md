@@ -46,6 +46,21 @@ For occupant-scoped facets, read models use normalized occupant slots rather tha
 
 For data packages, filters use URL/metadata registry fields only. Package contents are outside v1.0.
 
+Vehicle spec filters use `test_filter_summary` min/max ranges derived from canonical
+`vehicles` rows. A test matches a numeric vehicle spec filter when the test-level
+range overlaps the requested range. The promoted vehicle spec fields are:
+
+- `vehicle_test_weight`
+- `curb_weight`
+- `vehicle_length`
+- `vehicle_width`
+- `wheelbase`
+- `vax_crush_distance`
+
+`has_load_cell_barrier` is derived from canonical barrier shape and preserved raw
+barrier shape/commentary text. It is intentionally separate from instrumentation
+load-cell sensor channels.
+
 ## Read Model Policy
 
 `test_filter_summary`, `test_classification`, `test_facets`, and `asset_summary` are rebuildable derivatives. They must not contain pre-2011 tests or missing/parse-failed test dates.

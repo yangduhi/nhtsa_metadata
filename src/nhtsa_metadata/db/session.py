@@ -40,6 +40,34 @@ def _ensure_additive_columns(engine: Engine) -> None:
         "media_assets": {
             "asset_subtype": "VARCHAR(64)",
         },
+        "vehicles": {
+            "body_type": "TEXT",
+            "curb_weight_raw": "VARCHAR(120)",
+            "curb_weight": "NUMERIC",
+            "vehicle_length_raw": "VARCHAR(120)",
+            "vehicle_length": "NUMERIC",
+            "vehicle_width_raw": "VARCHAR(120)",
+            "vehicle_width": "NUMERIC",
+            "wheelbase_raw": "VARCHAR(120)",
+            "wheelbase": "NUMERIC",
+            "vax_crush_distance_raw": "VARCHAR(120)",
+            "vax_crush_distance": "NUMERIC",
+        },
+        "test_filter_summary": {
+            "vehicle_test_weight_min": "NUMERIC",
+            "vehicle_test_weight_max": "NUMERIC",
+            "curb_weight_min": "NUMERIC",
+            "curb_weight_max": "NUMERIC",
+            "vehicle_length_min": "NUMERIC",
+            "vehicle_length_max": "NUMERIC",
+            "vehicle_width_min": "NUMERIC",
+            "vehicle_width_max": "NUMERIC",
+            "wheelbase_min": "NUMERIC",
+            "wheelbase_max": "NUMERIC",
+            "vax_crush_distance_min": "NUMERIC",
+            "vax_crush_distance_max": "NUMERIC",
+            "has_load_cell_barrier": "BOOLEAN NOT NULL DEFAULT 0",
+        },
     }
     with engine.begin() as connection:
         for table_name, columns in additions.items():

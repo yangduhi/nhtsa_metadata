@@ -49,6 +49,7 @@ class ReadModelBuilder:
                 self.rebuild_facets()
             return
         vehicles = list(self.session.scalars(select(Vehicle).where(Vehicle.test_id == test.id)))
+        barriers = list(self.session.scalars(select(Barrier).where(Barrier.test_id == test.id)))
         assets = list(self.session.scalars(select(MediaAsset).where(MediaAsset.test_id == test.id)))
         participants = list(
             self.session.scalars(select(TestParticipant).where(TestParticipant.test_id == test.id))
@@ -76,6 +77,35 @@ class ReadModelBuilder:
                     {participant.participant_kind for participant in participants}
                 ),
                 asset_kinds_json=asset_kinds,
+                vehicle_test_weight_min=_numeric_min_or_none(
+                    vehicle.vehicle_test_weight for vehicle in vehicles
+                ),
+                vehicle_test_weight_max=_numeric_max_or_none(
+                    vehicle.vehicle_test_weight for vehicle in vehicles
+                ),
+                curb_weight_min=_numeric_min_or_none(vehicle.curb_weight for vehicle in vehicles),
+                curb_weight_max=_numeric_max_or_none(vehicle.curb_weight for vehicle in vehicles),
+                vehicle_length_min=_numeric_min_or_none(
+                    vehicle.vehicle_length for vehicle in vehicles
+                ),
+                vehicle_length_max=_numeric_max_or_none(
+                    vehicle.vehicle_length for vehicle in vehicles
+                ),
+                vehicle_width_min=_numeric_min_or_none(
+                    vehicle.vehicle_width for vehicle in vehicles
+                ),
+                vehicle_width_max=_numeric_max_or_none(
+                    vehicle.vehicle_width for vehicle in vehicles
+                ),
+                wheelbase_min=_numeric_min_or_none(vehicle.wheelbase for vehicle in vehicles),
+                wheelbase_max=_numeric_max_or_none(vehicle.wheelbase for vehicle in vehicles),
+                vax_crush_distance_min=_numeric_min_or_none(
+                    vehicle.vax_crush_distance for vehicle in vehicles
+                ),
+                vax_crush_distance_max=_numeric_max_or_none(
+                    vehicle.vax_crush_distance for vehicle in vehicles
+                ),
+                has_load_cell_barrier=_has_load_cell_barrier(barriers),
                 has_uds_or_tdms_package=bool(
                     {"uds", "tdms"} & {kind.lower() for kind in asset_kinds}
                     or {"UDS", "TDMS"} & asset_subtypes
@@ -212,6 +242,32 @@ def _min_or_none(values: Iterable[int | None]) -> int | None:
 def _max_or_none(values: Iterable[int | None]) -> int | None:
     valid = [value for value in values if value is not None]
     return max(valid) if valid else None
+
+
+def _numeric_min_or_none(values: Iterable[float | None]) -> float | None:
+    valid = [value for value in values if value is not None]
+    return min(valid) if valid else None
+
+
+def _numeric_max_or_none(values: Iterable[float | None]) -> float | None:
+    valid = [value for value in values if value is not None]
+    return max(valid) if valid else None
+
+
+def _has_load_cell_barrier(barriers: Iterable[Barrier]) -> bool:
+    for barrier in barriers:
+        raw_row = barrier.raw_row_json
+        raw = raw_row if isinstance(raw_row, dict) else {}
+        values = (
+            barrier.shape,
+            raw.get("barrierShape"),
+            raw.get("BARSHPD"),
+            raw.get("barrierCommentary"),
+            raw.get("BARCOM"),
+        )
+        if any("LOAD CELL" in str(value).upper() for value in values if value is not None):
+            return True
+    return False
 
 
 def _impact_direction(angle: float | None) -> str:

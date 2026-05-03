@@ -15,7 +15,14 @@ Schema v1.0 uses source field aliases to map API/export fields to canonical colu
 | `VEHICLE.MAKED` / `vehicleMake` | `vehicles.make` |
 | `VEHICLE.MODELD` / `vehicleModel` | `vehicles.model` |
 | `VEHICLE.YEAR` / `modelYear` | `vehicles.model_year`, never scope |
-| `VEHICLE.VEHSPD` | `vehicles.vehicle_speed_raw` / `vehicles.vehicle_speed` |
+| `VEHICLE.BODYD` | `vehicles.body_type` |
+| `VEHICLE.VEHTWT` / `vehicleTestWeight` | `vehicles.vehicle_test_weight_raw` / `vehicles.vehicle_test_weight` |
+| `VEHICLE.CURBWT` | `vehicles.curb_weight_raw` / `vehicles.curb_weight` |
+| `VEHICLE.VEHLEN` / `vehicleLength` | `vehicles.vehicle_length_raw` / `vehicles.vehicle_length` |
+| `VEHICLE.VEHWID` / `vehicleWidth` | `vehicles.vehicle_width_raw` / `vehicles.vehicle_width` |
+| `VEHICLE.WHLBAS` | `vehicles.wheelbase_raw` / `vehicles.wheelbase` |
+| `VEHICLE.CRHDST` / `vaxCrushDistance` | `vehicles.vax_crush_distance_raw` / `vehicles.vax_crush_distance` |
+| `VEHICLE.VEHSPD` / `vehicleSpeed` | `vehicles.vehicle_speed_raw` / `vehicles.vehicle_speed` |
 | `BARRIER.BARRIGD` / `rigidOrDeformableBarrier` | `barriers.rigidity` |
 | `BARRIER.BARSHPD` / `barrierShape` | `barriers.shape` |
 | `BARRIER.BARANG` | `barriers.angle_raw` / `barriers.angle` |

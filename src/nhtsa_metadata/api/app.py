@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import FastAPI
 from sqlalchemy import select
 
@@ -45,6 +47,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         test_type: str | None = None,
         vehicle_make: str | None = None,
         asset_kind: str | None = None,
+        vehicle_test_weight_min: float | None = None,
+        vehicle_test_weight_max: float | None = None,
+        curb_weight_min: float | None = None,
+        curb_weight_max: float | None = None,
+        vehicle_length_min: float | None = None,
+        vehicle_length_max: float | None = None,
+        vehicle_width_min: float | None = None,
+        vehicle_width_max: float | None = None,
+        wheelbase_min: float | None = None,
+        wheelbase_max: float | None = None,
+        vax_crush_distance_min: float | None = None,
+        vax_crush_distance_max: float | None = None,
+        has_load_cell_barrier: bool | None = None,
     ) -> dict[str, object]:
         with session_factory() as session:
             summaries = list(
@@ -61,6 +76,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             items = [item for item in items if _contains(item, "vehicle_makes", vehicle_make)]
         if asset_kind:
             items = [item for item in items if _contains(item, "asset_kinds", asset_kind)]
+        items = _filter_range(
+            items, "vehicle_test_weight", vehicle_test_weight_min, vehicle_test_weight_max
+        )
+        items = _filter_range(items, "curb_weight", curb_weight_min, curb_weight_max)
+        items = _filter_range(items, "vehicle_length", vehicle_length_min, vehicle_length_max)
+        items = _filter_range(items, "vehicle_width", vehicle_width_min, vehicle_width_max)
+        items = _filter_range(items, "wheelbase", wheelbase_min, wheelbase_max)
+        items = _filter_range(
+            items, "vax_crush_distance", vax_crush_distance_min, vax_crush_distance_max
+        )
+        if has_load_cell_barrier is not None:
+            items = [
+                item
+                for item in items
+                if item.get("has_load_cell_barrier") is has_load_cell_barrier
+            ]
         return {"items": items, "count": len(items)}
 
     @app.get("/api/tests/{test_no}")
@@ -103,6 +134,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "make": vehicle.make,
                         "model": vehicle.model,
                         "model_year": vehicle.model_year,
+                        "body_type": vehicle.body_type,
+                        "vehicle_speed": _number_out(vehicle.vehicle_speed),
+                        "vehicle_test_weight": _number_out(vehicle.vehicle_test_weight),
+                        "curb_weight": _number_out(vehicle.curb_weight),
+                        "vehicle_length": _number_out(vehicle.vehicle_length),
+                        "vehicle_width": _number_out(vehicle.vehicle_width),
+                        "wheelbase": _number_out(vehicle.wheelbase),
+                        "vax_crush_distance": _number_out(vehicle.vax_crush_distance),
                     }
                     for vehicle in vehicles
                 ],
@@ -177,6 +216,19 @@ def _summary_out(summary: TestFilterSummary) -> dict[str, object]:
         "vehicle_models": summary.vehicle_models_json or [],
         "participant_kinds": summary.participant_kinds_json or [],
         "asset_kinds": summary.asset_kinds_json or [],
+        "vehicle_test_weight_min": _number_out(summary.vehicle_test_weight_min),
+        "vehicle_test_weight_max": _number_out(summary.vehicle_test_weight_max),
+        "curb_weight_min": _number_out(summary.curb_weight_min),
+        "curb_weight_max": _number_out(summary.curb_weight_max),
+        "vehicle_length_min": _number_out(summary.vehicle_length_min),
+        "vehicle_length_max": _number_out(summary.vehicle_length_max),
+        "vehicle_width_min": _number_out(summary.vehicle_width_min),
+        "vehicle_width_max": _number_out(summary.vehicle_width_max),
+        "wheelbase_min": _number_out(summary.wheelbase_min),
+        "wheelbase_max": _number_out(summary.wheelbase_max),
+        "vax_crush_distance_min": _number_out(summary.vax_crush_distance_min),
+        "vax_crush_distance_max": _number_out(summary.vax_crush_distance_max),
+        "has_load_cell_barrier": summary.has_load_cell_barrier,
         "has_uds_or_tdms_package": summary.has_uds_or_tdms_package,
     }
 
@@ -200,3 +252,42 @@ def _classification_out(classification: TestClassification | None) -> dict[str, 
 def _contains(item: dict[str, object], key: str, value: str) -> bool:
     candidate = item.get(key)
     return isinstance(candidate, list) and value in candidate
+
+
+def _filter_range(
+    items: list[dict[str, object]],
+    prefix: str,
+    requested_min: float | None,
+    requested_max: float | None,
+) -> list[dict[str, object]]:
+    if requested_min is None and requested_max is None:
+        return items
+    return [
+        item
+        for item in items
+        if _range_overlaps(
+            item.get(f"{prefix}_min"),
+            item.get(f"{prefix}_max"),
+            requested_min,
+            requested_max,
+        )
+    ]
+
+
+def _range_overlaps(
+    actual_min: object,
+    actual_max: object,
+    requested_min: float | None,
+    requested_max: float | None,
+) -> bool:
+    if not isinstance(actual_min, int | float) or not isinstance(actual_max, int | float):
+        return False
+    if requested_min is not None and actual_max < requested_min:
+        return False
+    if requested_max is not None and actual_min > requested_max:
+        return False
+    return True
+
+
+def _number_out(value: int | float | Decimal | None) -> float | None:
+    return float(value) if value is not None else None

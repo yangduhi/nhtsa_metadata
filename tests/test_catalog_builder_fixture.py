@@ -74,6 +74,32 @@ def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> Non
             )
         }
         assert summaries[10001].has_uds_or_tdms_package is True
+        assert summaries[10001].vehicle_test_weight_min == 2912
+        assert summaries[10001].curb_weight_min == 2642
+        assert summaries[10001].vehicle_length_min == 5180
+        assert summaries[10001].vehicle_width_min == 2022
+        assert summaries[10001].wheelbase_min == 2955
+        assert summaries[10001].vax_crush_distance_min == 705
+        assert summaries[10001].has_load_cell_barrier is True
+        assert summaries[10003].vehicle_test_weight_min == 1368
+        assert summaries[10003].vehicle_test_weight_max == 1775
+        assert summaries[10003].vehicle_length_min == 4120
+        assert summaries[10003].vehicle_length_max == 4586
+        assert summaries[10003].vehicle_width_min == 1250
+        assert summaries[10003].vehicle_width_max == 1788
+        assert summaries[10003].has_load_cell_barrier is False
+        vehicle_10001 = session.scalar(
+            select(Vehicle)
+            .join(CrashTest, CrashTest.id == Vehicle.test_id)
+            .where(CrashTest.test_no == 10001)
+        )
+        assert vehicle_10001 is not None
+        assert vehicle_10001.body_type == "UTILITY VEHICLE"
+        assert vehicle_10001.curb_weight == 2642
+        assert vehicle_10001.vehicle_length == 5180
+        assert vehicle_10001.vehicle_width == 2022
+        assert vehicle_10001.wheelbase == 2955
+        assert vehicle_10001.vax_crush_distance == 705
         classifications = {
             row.test_no: row
             for row in session.scalars(

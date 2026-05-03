@@ -31,6 +31,38 @@ def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-unt
         "canonical_rule_id",
         "classification_run_id",
     } <= classification_columns
+    vehicle_columns = {column["name"] for column in inspect(engine).get_columns("vehicles")}
+    assert {
+        "body_type",
+        "curb_weight_raw",
+        "curb_weight",
+        "vehicle_length_raw",
+        "vehicle_length",
+        "vehicle_width_raw",
+        "vehicle_width",
+        "wheelbase_raw",
+        "wheelbase",
+        "vax_crush_distance_raw",
+        "vax_crush_distance",
+    } <= vehicle_columns
+    summary_columns = {
+        column["name"] for column in inspect(engine).get_columns("test_filter_summary")
+    }
+    assert {
+        "vehicle_test_weight_min",
+        "vehicle_test_weight_max",
+        "curb_weight_min",
+        "curb_weight_max",
+        "vehicle_length_min",
+        "vehicle_length_max",
+        "vehicle_width_min",
+        "vehicle_width_max",
+        "wheelbase_min",
+        "wheelbase_max",
+        "vax_crush_distance_min",
+        "vax_crush_distance_max",
+        "has_load_cell_barrier",
+    } <= summary_columns
 
     downgrade_base(database_url)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}
