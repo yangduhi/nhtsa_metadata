@@ -24,8 +24,8 @@ src/nhtsa_metadata/db/models.py
 src/nhtsa_metadata/db/session.py
 src/nhtsa_metadata/db/migrations.py
 src/nhtsa_metadata/services/db_health.py
-docs/db_schema.md
-docs/phase_reports/phase_2_db_foundation.md
+docs/2026-04-28__schema__current__db-schema.md
+docs/phase_reports/2026-04-28__bootstrap-phase-2__pass__phase-2-report.md
 tests/test_db_migrations.py
 tests/test_db_models.py
 ```
@@ -737,7 +737,7 @@ created_at DATETIME NOT NULL
 - `0001_initial_schema.py`는 upgrade/downgrade 모두 구현.
 - downgrade는 FK 역순으로 drop.
 
-## `docs/db_schema.md`
+## `docs/2026-04-28__schema__current__db-schema.md`
 
 다음 포함:
 
@@ -783,7 +783,7 @@ powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 
 ```text
 Alembic upgrade/downgrade 성공
-docs/db_schema.md와 실제 table 목록 일치
+docs/2026-04-28__schema__current__db-schema.md와 실제 table 목록 일치
 canonical tables가 lineage columns 보유
 source_payloads payload hash unique 정책 구현
 read model tables 존재

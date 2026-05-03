@@ -13,18 +13,18 @@
 
 ## Documentation
 
-- [ ] `README.md` defines metadata-only scope.
+- [ ] `2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md` defines metadata-only scope.
 - [ ] `AGENTS.md` contains guardrails.
-- [ ] `docs/source_contract.md` exists.
-- [ ] `docs/source_endpoint_matrix.md` includes `get-test-detail/{testNo}` optional endpoint.
-- [ ] `docs/source_field_aliases.md` exists.
-- [ ] `docs/source_anomalies.md` documents wrong summary link, pagination, empty endpoint, multi-vehicle, date anomalies, zero/null.
-- [ ] `docs/db_schema_contract.md` exists.
-- [ ] `docs/db_schema.md` matches implemented schema.
-- [ ] `docs/catalog_builder_contract.md` exists.
-- [ ] `docs/filtering_contract.md` exists.
-- [ ] `docs/field_coverage_contract.md` exists.
-- [ ] `docs/operations.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-contract.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-endpoint-matrix.md` includes `get-test-detail/{testNo}` optional endpoint.
+- [ ] `docs/2026-04-28__source-contract__current__source-field-aliases.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-anomalies.md` documents wrong summary link, pagination, empty endpoint, multi-vehicle, date anomalies, zero/null.
+- [ ] `docs/2026-04-28__contract__current__db-schema-contract.md` exists.
+- [ ] `docs/2026-04-28__schema__current__db-schema.md` matches implemented schema.
+- [ ] `docs/2026-04-28__contract__current__catalog-builder-contract.md` exists.
+- [ ] `docs/2026-04-28__contract__current__filtering-contract.md` exists.
+- [ ] `docs/2026-04-28__contract__current__field-coverage-contract.md` exists.
+- [ ] `docs/2026-04-28__operations__current__operations.md` exists.
 - [ ] `docs/phase_reports/` contains phase reports.
 
 ## Source Contract
@@ -194,7 +194,7 @@ DB properties:
 - [ ] Resume behavior test exists.
 - [ ] Scale report command exists.
 - [ ] Index strategy documented.
-- [ ] `docs/postgresql_migration_notes.md` exists.
+- [ ] `docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md` exists.
 - [ ] No large JSON payload index added.
 
 ## Final Verification Commands

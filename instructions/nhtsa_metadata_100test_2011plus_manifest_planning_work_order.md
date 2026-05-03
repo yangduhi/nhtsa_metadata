@@ -32,8 +32,8 @@ semantic cardinality remediation은 통과한 상태로 본다.
 Codex는 우선 다음 문서와 후보 산출물 계획만 만든다.
 
 ```text
-docs/phase_reports/100test_2011plus_manifest_plan.md
-docs/phase_reports/100test_2011plus_acceptance_matrix.md
+docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-manifest-plan.md
+docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-acceptance-matrix.md
 ```
 
 선택적으로, live 호출 없이 local reference DB만 사용해 후보 manifest를 만들 수 있다면 다음 파일을 생성할 수 있다. 단, 이 파일은 `data/` 아래에 두고 commit하지 않는다.
@@ -148,7 +148,7 @@ CLI가 combined stratum cap을 아직 지원하지 않으면, 문서에 gap으�
 
 `--reference-database`는 canonical source가 아니다. bounded manifest seed일 뿐이다.
 
-`docs/phase_reports/100test_2011plus_manifest_plan.md`에 다음을 기록한다.
+`docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-manifest-plan.md`에 다음을 기록한다.
 
 ```text
 reference DB path
@@ -214,7 +214,7 @@ expected_instrumentation_tier
 
 ## 7. 100건 pilot acceptance matrix
 
-`docs/phase_reports/100test_2011plus_acceptance_matrix.md`에 아래 판정표를 작성한다.
+`docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-acceptance-matrix.md`에 아래 판정표를 작성한다.
 
 ### 7.1 Manifest acceptance
 

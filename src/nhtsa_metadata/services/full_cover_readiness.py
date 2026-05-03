@@ -553,10 +553,10 @@ class SchemaContractValidator:
 
     def _scope_contract_check(self, hard_failures: list[str]) -> dict[str, Any]:
         docs = [
-            Path("docs/db_schema_contract.md"),
-            Path("docs/filtering_contract.md"),
-            Path("docs/catalog_builder_contract.md"),
-            Path("docs/operations.md"),
+            Path("docs/2026-04-28__contract__current__db-schema-contract.md"),
+            Path("docs/2026-04-28__contract__current__filtering-contract.md"),
+            Path("docs/2026-04-28__contract__current__catalog-builder-contract.md"),
+            Path("docs/2026-04-28__operations__current__operations.md"),
         ]
         checked = []
         for doc in docs:

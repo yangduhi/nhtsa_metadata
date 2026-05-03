@@ -24,7 +24,7 @@ scripts/live_validate.ps1
 tests/test_live_client_safety.py
 tests/test_live_baseline_assertions_fixture.py
 
-docs/phase_reports/phase_7_manual_live_validation.md
+docs/phase_reports/2026-04-28__bootstrap-phase-7__pass__phase-7-report.md
 ```
 
 ## Live client
@@ -158,7 +158,7 @@ field_coverage_snapshot exists
 
 ## Phase report
 
-`docs/phase_reports/phase_7_manual_live_validation.md`:
+`docs/phase_reports/2026-04-28__bootstrap-phase-7__pass__phase-7-report.md`:
 
 ```markdown
 # Phase 7 Manual Live Validation Report

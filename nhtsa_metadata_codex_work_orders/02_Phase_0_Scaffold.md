@@ -19,7 +19,7 @@
 ```text
 D:\vscode\nhtsa_metadata
 ├── AGENTS.md
-├── README.md
+├── 2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md
 ├── pyproject.toml
 ├── alembic.ini
 ├── .env.example
@@ -31,7 +31,7 @@ D:\vscode\nhtsa_metadata
 ├── .vscode\settings.json
 ├── scripts\test.ps1
 ├── scripts\verify.ps1
-├── docs\operations.md
+├── docs\2026-04-28__operations__current__operations.md
 ├── docs\phase_reports\.gitkeep
 ├── instructions\.gitkeep
 ├── src\nhtsa_metadata\
@@ -234,7 +234,7 @@ $ErrorActionPreference = "Stop"
 - .git, .venv, DB, data/manual, cache, screenshots, response dumps 복사 금지
 ```
 
-## `README.md`
+## `2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md`
 
 섹션:
 
@@ -276,7 +276,7 @@ powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 
 ## Phase report
 
-`docs/phase_reports/phase_0_scaffold.md` 생성:
+`docs/phase_reports/2026-04-28__bootstrap-phase-0__pass__phase-0-report.md` 생성:
 
 ```markdown
 # Phase 0 Report

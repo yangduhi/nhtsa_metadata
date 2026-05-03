@@ -31,7 +31,7 @@ tests/test_parsers_api_detail.py
 tests/test_field_catalog.py
 tests/test_normalization.py
 tests/test_canonical_mapper.py
-docs/phase_reports/phase_4_parser_normalizer.md
+docs/phase_reports/2026-04-28__bootstrap-phase-4__pass__phase-4-report.md
 ```
 
 ## DTO 설계

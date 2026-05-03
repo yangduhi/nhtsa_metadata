@@ -49,9 +49,9 @@ data/stratified_live_pilot_2011plus_1000.sqlite
 data/schema_audit_report_2011plus_1000.json
 data/schema_optimization_report_2011plus_1000.json
 
-docs/phase_reports/1000test_2011plus_live_manifest_review.md
-docs/phase_reports/1000test_2011plus_live_pilot_report.md
-docs/phase_reports/1000test_2011plus_schema_optimization_report.md
+docs/phase_reports/2026-04-30__1000-test-expansion__pass__1000-test-2011-plus-live-manifest-review.md
+docs/phase_reports/2026-04-30__1000-test-expansion__pass__1000-test-2011-plus-live-pilot-report.md
+docs/phase_reports/2026-04-30__1000-test-expansion__recorded__1000-test-2011-plus-schema-optimization-report.md
 ```
 
 `data/` 산출물은 ignored 상태여야 하며 commit하지 않는다.
@@ -678,9 +678,9 @@ backfill_items
 다음 문서를 생성 또는 갱신한다.
 
 ```text
-docs/phase_reports/1000test_2011plus_endpoint_completeness_report.md
-docs/phase_reports/1000test_2011plus_schema_backlog_report.md
-docs/phase_reports/1000test_2011plus_full_scale_readiness_gate.md
+docs/phase_reports/2026-04-30__1000-test-expansion__recorded__1000-test-2011-plus-endpoint-completeness-report.md
+docs/phase_reports/2026-04-30__1000-test-expansion__accepted__1000-test-2011-plus-schema-backlog-report.md
+docs/phase_reports/2026-04-30__1000-test-expansion__accepted__1000-test-2011-plus-full-scale-readiness-gate.md
 ```
 
 ### 10.1 Endpoint completeness report

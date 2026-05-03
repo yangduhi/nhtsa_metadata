@@ -1,0 +1,52 @@
+[
+  {
+    "bytes": 2739,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__false-positive-check-definitions.md",
+    "sha256": "0ab83010522d16dd6940496ccb0d6881b66710a30f186a68f41bb34d0232c960"
+  },
+  {
+    "bytes": 2493,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__feature-extraction-summary.md",
+    "sha256": "aeb9294f89a65548b8844898759fd0c09aeb41f6781c33b6c0c6b702d81694b6"
+  },
+  {
+    "bytes": 17346,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__full-scale-classification-v1-4-2011-plus.md",
+    "sha256": "1952e0ec92ece72811335aeeea12d66b2704fdeff21cb26193dcc87289efca06"
+  },
+  {
+    "bytes": 1542,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__full-scale-code-values-rebuild-2011-plus.md",
+    "sha256": "cf41112535a11a159753085418de5a69f195b5e34fea44cd586535ac015d30a2"
+  },
+  {
+    "bytes": 2162,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__full-scale-endpoint-completeness-2011-plus.md",
+    "sha256": "716a2f6d6218a7a0a98936b509663c419117e1d00d05cad1d2e596a8fc6c9ec7"
+  },
+  {
+    "bytes": 1596,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__full-scale-schema-audit-2011-plus.md",
+    "sha256": "2508a978fb2488135c894d33acc9e025e6ce36a6ffdb29682349b6cedef4dc01"
+  },
+  {
+    "bytes": 2589,
+    "file": "2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md",
+    "sha256": "fee3393c25bd0dea6297d2508d9c3358ae8de37118a401e7ed0ceb972378aedc"
+  },
+  {
+    "bytes": 162458,
+    "file": "failure_manifest_73.csv",
+    "sha256": "01ca5b11960496d9df6598eb538f20806b5e991dee413effbb27da5db657e64c"
+  },
+  {
+    "bytes": 295622,
+    "file": "failure_manifest_73.json",
+    "sha256": "1d8ecf7e4f5abe3b4cb9ba1a87328ec765a2d24bcd7d624c5580a7d43ef09beb"
+  },
+  {
+    "bytes": 314404,
+    "file": "us_fmvss_ncap_crash_test_classification_method_v1_4_1500sample_targeted_rules.json",
+    "sha256": "24a3062946ff7a18731963cb72c7b73e9337765817e404f0caa4378d8ed82fcc"
+  }
+]

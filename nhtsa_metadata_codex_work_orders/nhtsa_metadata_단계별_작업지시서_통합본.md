@@ -255,7 +255,7 @@ manual live validation -> baseline 통과 또는 미수행 사실 명시
 ```text
 D:\vscode\nhtsa_metadata
 ├── AGENTS.md
-├── README.md
+├── 2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md
 ├── pyproject.toml
 ├── alembic.ini
 ├── .env.example
@@ -267,7 +267,7 @@ D:\vscode\nhtsa_metadata
 ├── .vscode\settings.json
 ├── scripts\test.ps1
 ├── scripts\verify.ps1
-├── docs\operations.md
+├── docs\2026-04-28__operations__current__operations.md
 ├── docs\phase_reports\.gitkeep
 ├── instructions\.gitkeep
 ├── src\nhtsa_metadata\
@@ -470,7 +470,7 @@ $ErrorActionPreference = "Stop"
 - .git, .venv, DB, data/manual, cache, screenshots, response dumps 복사 금지
 ```
 
-## `README.md`
+## `2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md`
 
 섹션:
 
@@ -512,7 +512,7 @@ powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 
 ## Phase report
 
-`docs/phase_reports/phase_0_scaffold.md` 생성:
+`docs/phase_reports/2026-04-28__bootstrap-phase-0__pass__phase-0-report.md` 생성:
 
 ```markdown
 # Phase 0 Report
@@ -556,16 +556,16 @@ source client interface skeleton 작성
 ## 생성/수정 문서
 
 ```text
-docs/source_contract.md
-docs/source_endpoint_matrix.md
-docs/source_field_aliases.md
-docs/source_anomalies.md
-docs/catalog_builder_contract.md
-docs/filtering_contract.md
-docs/field_coverage_contract.md
-docs/db_schema_contract.md
-docs/operations.md
-docs/phase_reports/phase_1_source_contract.md
+docs/2026-04-28__source-contract__current__source-contract.md
+docs/2026-04-28__source-contract__current__source-endpoint-matrix.md
+docs/2026-04-28__source-contract__current__source-field-aliases.md
+docs/2026-04-28__source-contract__current__source-anomalies.md
+docs/2026-04-28__contract__current__catalog-builder-contract.md
+docs/2026-04-28__contract__current__filtering-contract.md
+docs/2026-04-28__contract__current__field-coverage-contract.md
+docs/2026-04-28__contract__current__db-schema-contract.md
+docs/2026-04-28__operations__current__operations.md
+docs/phase_reports/2026-04-28__bootstrap-phase-1__pass__phase-1-report.md
 ```
 
 ## Endpoint matrix
@@ -634,7 +634,7 @@ notes
 
 ## Source anomalies 문서화
 
-`docs/source_anomalies.md`에 반드시 포함:
+`docs/2026-04-28__source-contract__current__source-anomalies.md`에 반드시 포함:
 
 ### Wrong summary links
 
@@ -676,7 +676,7 @@ notes
 
 ## Field alias map
 
-`docs/source_field_aliases.md` 및 `field_aliases.py` 초안:
+`docs/2026-04-28__source-contract__current__source-field-aliases.md` 및 `field_aliases.py` 초안:
 
 ```text
 TEST.TSTNO                    -> tests.test_no
@@ -927,8 +927,8 @@ src/nhtsa_metadata/db/models.py
 src/nhtsa_metadata/db/session.py
 src/nhtsa_metadata/db/migrations.py
 src/nhtsa_metadata/services/db_health.py
-docs/db_schema.md
-docs/phase_reports/phase_2_db_foundation.md
+docs/2026-04-28__schema__current__db-schema.md
+docs/phase_reports/2026-04-28__bootstrap-phase-2__pass__phase-2-report.md
 tests/test_db_migrations.py
 tests/test_db_models.py
 ```
@@ -1640,7 +1640,7 @@ created_at DATETIME NOT NULL
 - `0001_initial_schema.py`는 upgrade/downgrade 모두 구현.
 - downgrade는 FK 역순으로 drop.
 
-## `docs/db_schema.md`
+## `docs/2026-04-28__schema__current__db-schema.md`
 
 다음 포함:
 
@@ -1686,7 +1686,7 @@ powershell -ExecutionPolicy Bypass -File .harness\run.ps1
 
 ```text
 Alembic upgrade/downgrade 성공
-docs/db_schema.md와 실제 table 목록 일치
+docs/2026-04-28__schema__current__db-schema.md와 실제 table 목록 일치
 canonical tables가 lineage columns 보유
 source_payloads payload hash unique 정책 구현
 read model tables 존재
@@ -2028,7 +2028,7 @@ tests/test_parsers_api_detail.py
 tests/test_field_catalog.py
 tests/test_normalization.py
 tests/test_canonical_mapper.py
-docs/phase_reports/phase_4_parser_normalizer.md
+docs/phase_reports/2026-04-28__bootstrap-phase-4__pass__phase-4-report.md
 ```
 
 ## DTO 설계
@@ -2497,7 +2497,7 @@ tests/test_catalog_builder_fixture.py
 tests/test_rebuild.py
 tests/test_coverage_report.py
 
-docs/phase_reports/phase_5_ingestion_rebuild.md
+docs/phase_reports/2026-04-28__bootstrap-phase-5__pass__phase-5-report.md
 ```
 
 ## SourcePayloadService
@@ -2869,7 +2869,7 @@ tests/test_api_filters.py
 tests/test_api_coverage.py
 tests/test_api_collection_runs.py
 
-docs/phase_reports/phase_6_query_filter_api.md
+docs/phase_reports/2026-04-28__bootstrap-phase-6__pass__phase-6-report.md
 ```
 
 ## Dependency policy
@@ -3180,7 +3180,7 @@ scripts/live_validate.ps1
 tests/test_live_client_safety.py
 tests/test_live_baseline_assertions_fixture.py
 
-docs/phase_reports/phase_7_manual_live_validation.md
+docs/phase_reports/2026-04-28__bootstrap-phase-7__pass__phase-7-report.md
 ```
 
 ## Live client
@@ -3314,7 +3314,7 @@ field_coverage_snapshot exists
 
 ## Phase report
 
-`docs/phase_reports/phase_7_manual_live_validation.md`:
+`docs/phase_reports/2026-04-28__bootstrap-phase-7__pass__phase-7-report.md`:
 
 ```markdown
 # Phase 7 Manual Live Validation Report
@@ -3440,8 +3440,8 @@ src/nhtsa_metadata/cli.py
 scripts/scale_check_fixture.ps1
 
 docs/scale_readiness.md
-docs/postgresql_migration_notes.md
-docs/phase_reports/phase_8_scale_readiness.md
+docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md
+docs/phase_reports/2026-04-28__bootstrap-phase-8__pass__phase-8-report.md
 
 tests/test_scale_report_fixture.py
 tests/test_resume_behavior.py
@@ -3537,7 +3537,7 @@ indexing every raw field before query needs are known
 
 ## PostgreSQL migration notes
 
-`docs/postgresql_migration_notes.md` 포함 내용:
+`docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md` 포함 내용:
 
 ```text
 SQLAlchemy JSON -> PostgreSQL JSONB consideration
@@ -3854,18 +3854,18 @@ Do not perform broad redesign unless necessary. Prefer completing the phase with
 
 ## Documentation
 
-- [ ] `README.md` defines metadata-only scope.
+- [ ] `2026-05-02__classifier-v1-4-failure-package__recorded__v1-4-full-corpus-failure-package.md` defines metadata-only scope.
 - [ ] `AGENTS.md` contains guardrails.
-- [ ] `docs/source_contract.md` exists.
-- [ ] `docs/source_endpoint_matrix.md` includes `get-test-detail/{testNo}` optional endpoint.
-- [ ] `docs/source_field_aliases.md` exists.
-- [ ] `docs/source_anomalies.md` documents wrong summary link, pagination, empty endpoint, multi-vehicle, date anomalies, zero/null.
-- [ ] `docs/db_schema_contract.md` exists.
-- [ ] `docs/db_schema.md` matches implemented schema.
-- [ ] `docs/catalog_builder_contract.md` exists.
-- [ ] `docs/filtering_contract.md` exists.
-- [ ] `docs/field_coverage_contract.md` exists.
-- [ ] `docs/operations.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-contract.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-endpoint-matrix.md` includes `get-test-detail/{testNo}` optional endpoint.
+- [ ] `docs/2026-04-28__source-contract__current__source-field-aliases.md` exists.
+- [ ] `docs/2026-04-28__source-contract__current__source-anomalies.md` documents wrong summary link, pagination, empty endpoint, multi-vehicle, date anomalies, zero/null.
+- [ ] `docs/2026-04-28__contract__current__db-schema-contract.md` exists.
+- [ ] `docs/2026-04-28__schema__current__db-schema.md` matches implemented schema.
+- [ ] `docs/2026-04-28__contract__current__catalog-builder-contract.md` exists.
+- [ ] `docs/2026-04-28__contract__current__filtering-contract.md` exists.
+- [ ] `docs/2026-04-28__contract__current__field-coverage-contract.md` exists.
+- [ ] `docs/2026-04-28__operations__current__operations.md` exists.
 - [ ] `docs/phase_reports/` contains phase reports.
 
 ## Source Contract
@@ -4035,7 +4035,7 @@ DB properties:
 - [ ] Resume behavior test exists.
 - [ ] Scale report command exists.
 - [ ] Index strategy documented.
-- [ ] `docs/postgresql_migration_notes.md` exists.
+- [ ] `docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md` exists.
 - [ ] No large JSON payload index added.
 
 ## Final Verification Commands

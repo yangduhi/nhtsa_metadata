@@ -54,7 +54,7 @@ tests/test_api_filters.py
 tests/test_api_coverage.py
 tests/test_api_collection_runs.py
 
-docs/phase_reports/phase_6_query_filter_api.md
+docs/phase_reports/2026-04-28__bootstrap-phase-6__pass__phase-6-report.md
 ```
 
 ## Dependency policy

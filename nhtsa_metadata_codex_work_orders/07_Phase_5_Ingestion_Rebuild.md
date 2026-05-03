@@ -44,7 +44,7 @@ tests/test_catalog_builder_fixture.py
 tests/test_rebuild.py
 tests/test_coverage_report.py
 
-docs/phase_reports/phase_5_ingestion_rebuild.md
+docs/phase_reports/2026-04-28__bootstrap-phase-5__pass__phase-5-report.md
 ```
 
 ## SourcePayloadService

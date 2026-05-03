@@ -61,8 +61,8 @@ full crawler: 미실행
 기존 planning 산출물:
 
 ```text
-docs/phase_reports/100test_2011plus_manifest_plan.md
-docs/phase_reports/100test_2011plus_acceptance_matrix.md
+docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-manifest-plan.md
+docs/phase_reports/2026-04-30__100-test-pilot__pass__100test-2011plus-acceptance-matrix.md
 instructions/nhtsa_metadata_100test_2011plus_manifest_planning_work_order.md
 data/stratified_live_pilot_2011plus_100_manifest_candidate.csv  # ignored, reference DB seed only
 ```
@@ -186,7 +186,7 @@ live manifest에 pre-2011, missing date, parse failed date, duplicate test_no, a
 다음 문서를 생성 또는 갱신한다.
 
 ```text
-docs/phase_reports/100test_2011plus_live_manifest_review.md
+docs/phase_reports/2026-04-30__100-test-pilot__recorded__100-test-2011-plus-live-manifest-review.md
 ```
 
 포함할 내용:
@@ -347,7 +347,7 @@ no mapped field regression
 .venv\Scripts\python.exe -m nhtsa_metadata.cli schema optimize-analyze `
   --database-url sqlite:///data/stratified_live_pilot_2011plus_100.sqlite `
   --output data/schema_optimization_report_2011plus_100.json `
-  --markdown-output docs/phase_reports/100test_2011plus_schema_optimization_report.md `
+  --markdown-output docs/phase_reports/2026-04-30__100-test-pilot__recorded__100-test-2011-plus-schema-optimization-report.md `
   --min-test-support 5 `
   --min-non-null-ratio 0.10 `
   --max-dictionary-distinct-ratio 0.25 `
@@ -581,7 +581,7 @@ P3:
 
 ### 8.7 Markdown report structure
 
-`docs/phase_reports/100test_2011plus_schema_optimization_report.md`를 작성한다.
+`docs/phase_reports/2026-04-30__100-test-pilot__recorded__100-test-2011-plus-schema-optimization-report.md`를 작성한다.
 
 필수 섹션:
 
@@ -652,8 +652,8 @@ schema_optimization_recommendations
 
 ```text
 - Alembic migration 추가
-- docs/db_schema.md 갱신
-- docs/db_schema_contract.md 갱신
+- docs/2026-04-28__schema__current__db-schema.md 갱신
+- docs/2026-04-28__contract__current__db-schema-contract.md 갱신
 - tests 추가
 ```
 
@@ -666,7 +666,7 @@ schema_optimization_recommendations
 다음 문서를 생성한다.
 
 ```text
-docs/phase_reports/100test_2011plus_live_pilot_report.md
+docs/phase_reports/2026-04-30__100-test-pilot__recorded__100-test-2011-plus-live-pilot-report.md
 ```
 
 포함할 내용:

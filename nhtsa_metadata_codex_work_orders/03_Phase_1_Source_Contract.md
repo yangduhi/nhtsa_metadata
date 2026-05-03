@@ -18,16 +18,16 @@ source client interface skeleton 작성
 ## 생성/수정 문서
 
 ```text
-docs/source_contract.md
-docs/source_endpoint_matrix.md
-docs/source_field_aliases.md
-docs/source_anomalies.md
-docs/catalog_builder_contract.md
-docs/filtering_contract.md
-docs/field_coverage_contract.md
-docs/db_schema_contract.md
-docs/operations.md
-docs/phase_reports/phase_1_source_contract.md
+docs/2026-04-28__source-contract__current__source-contract.md
+docs/2026-04-28__source-contract__current__source-endpoint-matrix.md
+docs/2026-04-28__source-contract__current__source-field-aliases.md
+docs/2026-04-28__source-contract__current__source-anomalies.md
+docs/2026-04-28__contract__current__catalog-builder-contract.md
+docs/2026-04-28__contract__current__filtering-contract.md
+docs/2026-04-28__contract__current__field-coverage-contract.md
+docs/2026-04-28__contract__current__db-schema-contract.md
+docs/2026-04-28__operations__current__operations.md
+docs/phase_reports/2026-04-28__bootstrap-phase-1__pass__phase-1-report.md
 ```
 
 ## Endpoint matrix
@@ -96,7 +96,7 @@ notes
 
 ## Source anomalies 문서화
 
-`docs/source_anomalies.md`에 반드시 포함:
+`docs/2026-04-28__source-contract__current__source-anomalies.md`에 반드시 포함:
 
 ### Wrong summary links
 
@@ -138,7 +138,7 @@ notes
 
 ## Field alias map
 
-`docs/source_field_aliases.md` 및 `field_aliases.py` 초안:
+`docs/2026-04-28__source-contract__current__source-field-aliases.md` 및 `field_aliases.py` 초안:
 
 ```text
 TEST.TSTNO                    -> tests.test_no

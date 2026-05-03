@@ -37,8 +37,8 @@ src/nhtsa_metadata/cli.py
 scripts/scale_check_fixture.ps1
 
 docs/scale_readiness.md
-docs/postgresql_migration_notes.md
-docs/phase_reports/phase_8_scale_readiness.md
+docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md
+docs/phase_reports/2026-04-28__bootstrap-phase-8__pass__phase-8-report.md
 
 tests/test_scale_report_fixture.py
 tests/test_resume_behavior.py
@@ -134,7 +134,7 @@ indexing every raw field before query needs are known
 
 ## PostgreSQL migration notes
 
-`docs/postgresql_migration_notes.md` 포함 내용:
+`docs/2026-04-28__migration-notes__current__postgresql-migration-notes.md` 포함 내용:
 
 ```text
 SQLAlchemy JSON -> PostgreSQL JSONB consideration

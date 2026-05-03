@@ -2,15 +2,15 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $requiredDocs = @(
-    "docs\source_contract.md",
-    "docs\source_endpoint_matrix.md",
-    "docs\source_field_aliases.md",
-    "docs\source_anomalies.md",
-    "docs\catalog_builder_contract.md",
-    "docs\filtering_contract.md",
-    "docs\field_coverage_contract.md",
-    "docs\db_schema_contract.md",
-    "docs\operations.md"
+    "docs\2026-04-28__source-contract__current__source-contract.md",
+    "docs\2026-04-28__source-contract__current__source-endpoint-matrix.md",
+    "docs\2026-04-28__source-contract__current__source-field-aliases.md",
+    "docs\2026-04-28__source-contract__current__source-anomalies.md",
+    "docs\2026-04-28__contract__current__catalog-builder-contract.md",
+    "docs\2026-04-28__contract__current__filtering-contract.md",
+    "docs\2026-04-28__contract__current__field-coverage-contract.md",
+    "docs\2026-04-28__contract__current__db-schema-contract.md",
+    "docs\2026-04-28__operations__current__operations.md"
 )
 
 foreach ($relativePath in $requiredDocs) {
