@@ -32,6 +32,15 @@
 - Do not perform drive-by refactors, broad formatting, dependency upgrades, or schema/API changes unless explicitly requested.
 - If a task is ambiguous, ask at most two clarifying questions. If safe to proceed, state assumptions and continue.
 
+## Workspace Policy
+
+- Do not create new git worktrees.
+- Do not create sibling repo folders.
+- Do not run `git worktree add`.
+- Do not clone this repository into another local folder.
+- Work only in the user-specified repository directory.
+- If branch isolation is needed but unsafe in the current directory, stop and report instead.
+
 ## Planning Policy
 
 - For trivial one-file fixes, implement directly only when the change does not touch contracts, schema, API behavior, generated surfaces, harness behavior, live-access gates, or project guardrails.
