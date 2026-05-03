@@ -570,6 +570,61 @@ class TestClassification(TimestampMixin, Base):
     counterparty_kind: Mapped[str] = sa_mapped_column(String(64), nullable=False)
     test_family: Mapped[str] = sa_mapped_column(String(120), nullable=False)
     classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(
+        String(64), default="manual_review_required", nullable=False
+    )
+    canonical_label: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    canonical_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    specificity_level: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    classification_run_id: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_summary_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+
+
+class ClassificationAdjudication(TimestampMixin, Base):
+    __tablename__ = "classification_adjudication"
+    __table_args__ = (UniqueConstraint("test_no", "classifier_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int | None] = sa_mapped_column(ForeignKey("tests.id"), nullable=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    adjudication_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    final_label: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    recommended_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    adjudication_reason: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    recommended_action: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    source_endpoint_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class TestClassificationCandidate(TimestampMixin, Base):
+    __tablename__ = "test_classification_candidates"
+    __table_args__ = (UniqueConstraint("test_no", "classifier_version", "rank"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int | None] = sa_mapped_column(ForeignKey("tests.id"), nullable=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    rank: Mapped[int] = sa_mapped_column(Integer, nullable=False)
+    rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    canonical_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    program_domain: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    specificity_level: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    priority: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    score: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    matched_evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    fallback_used: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    alias_used: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
 
 
 class TestFacet(TimestampMixin, Base):
@@ -606,6 +661,7 @@ __all__ = [
     "Barrier",
     "Base",
     "CanonicalRowSource",
+    "ClassificationAdjudication",
     "CodeValue",
     "CollectionRun",
     "CollectionRunItem",
@@ -631,6 +687,7 @@ __all__ = [
     "TestFacet",
     "TestFilterSummary",
     "TestClassification",
+    "TestClassificationCandidate",
     "TestParticipant",
     "Vehicle",
 ]
