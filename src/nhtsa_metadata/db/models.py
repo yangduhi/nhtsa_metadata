@@ -627,6 +627,116 @@ class TestClassificationCandidate(TimestampMixin, Base):
     alias_used: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
 
 
+class ClassificationEvidence(TimestampMixin, Base):
+    __tablename__ = "classification_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    source_system: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    evidence_stage: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    source_payload_id: Mapped[int | None] = sa_mapped_column(
+        ForeignKey("source_payloads.id"), nullable=True
+    )
+    source_endpoint_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    source_field_path: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_feature_key: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    candidate_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    final_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class CanonicalLabelRegistry(TimestampMixin, Base):
+    __tablename__ = "canonical_label_registry"
+    __table_args__ = (UniqueConstraint("canonical_label", "registry_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    canonical_label: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    registry_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    label_domain: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    label_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    definition: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    source_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+
+
+class RuleRegistry(TimestampMixin, Base):
+    __tablename__ = "rule_registry"
+    __table_args__ = (UniqueConstraint("rule_id", "rule_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    rule_id: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    rule_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    canonical_label: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    evidence_gates_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+
+
+class ProgramStandardEvidence(TimestampMixin, Base):
+    __tablename__ = "program_standard_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    program_domain: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    standard_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class TestEventDomain(TimestampMixin, Base):
+    __tablename__ = "test_event_domain"
+    __table_args__ = (UniqueConstraint("test_no", "domain_name"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    domain_name: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    domain_confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class ImpactDeviceEvidence(TimestampMixin, Base):
+    __tablename__ = "impact_device_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    device_type: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class RestraintEquipmentEvidence(TimestampMixin, Base):
+    __tablename__ = "restraint_equipment_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    equipment_type: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class ClassificationFeatureEvidence(TimestampMixin, Base):
+    __tablename__ = "classification_feature_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    normalized_text: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_features_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    source_payload_ids_json: Mapped[list[int] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    source_field_paths_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    extraction_warnings_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+
+
 class TestFacet(TimestampMixin, Base):
     __tablename__ = "test_facets"
     __table_args__ = (UniqueConstraint("facet_name", "facet_value"),)
@@ -662,6 +772,9 @@ __all__ = [
     "Base",
     "CanonicalRowSource",
     "ClassificationAdjudication",
+    "ClassificationEvidence",
+    "ClassificationFeatureEvidence",
+    "CanonicalLabelRegistry",
     "CodeValue",
     "CollectionRun",
     "CollectionRunItem",
@@ -675,9 +788,13 @@ __all__ = [
     "InstrumentationChannelDetail",
     "IntrusionMeasurement",
     "InjuryMetric",
+    "ImpactDeviceEvidence",
     "MediaAsset",
     "Occupant",
+    "ProgramStandardEvidence",
     "Restraint",
+    "RestraintEquipmentEvidence",
+    "RuleRegistry",
     "SourceConflict",
     "SourceEndpoint",
     "SourceFieldCatalog",
@@ -685,6 +802,7 @@ __all__ = [
     "SourcePayloadObservation",
     "SourcePayloadSection",
     "TestFacet",
+    "TestEventDomain",
     "TestFilterSummary",
     "TestClassification",
     "TestClassificationCandidate",
