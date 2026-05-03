@@ -1,0 +1,14 @@
+metric,v1_4,v1_4_1,delta,status,note
+total_count,3891,3891,0,pass,
+classified_count,3844,3844,0,pass,
+unclassified_count,47,47,0,pass,
+known_false_positive_count,26,0,-26,pass,
+multi_candidate_count,1643,1649,6,warn,non-hard quality metric increased after adding targeted candidates
+multi_rule_family_count,1222,1226,4,warn,non-hard quality metric increased after adding targeted candidates
+alias_used_count,606,606,0,pass,
+fallback_used_count,852,845,-7,pass,
+generic_used_count,572,565,-7,pass,
+aggregate_used_count,195,195,0,pass,
+metadata_gap_used_count,666,659,-7,pass,"decrease comes from targeted research-specific repairs, not broader fallback"
+manifest_rows,3891,3891,0,pass,authoritative manifest row count
+manifest_sha256,b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be,b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be,,pass,authoritative manifest hash

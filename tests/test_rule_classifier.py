@@ -74,6 +74,64 @@ def test_classifier_keeps_part_581_out_of_fmvss_crashworthiness(tmp_settings) ->
     assert payload["summary"]["known_false_positive_count"] == 0
 
 
+def test_classifier_routes_research_fmvss_pole_away_from_ncap_side_pole(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    session = _session(tmp_settings)
+    with session as db:
+        db.add(
+            CrashTest(
+                test_no=3,
+                test_type="RESEARCH",
+                test_date_parse_status="parsed",
+                contractor_study_title=(
+                    "2018 HONDA ACCORD LEFT SIDE FMVSS POLE IMPACT AT 32 KPH"
+                ),
+                test_configuration="VEHICLE INTO POLE",
+                impact_angle=0,
+                closing_speed=32.0,
+            )
+        )
+        db.commit()
+        payload = classify_database(
+            db,
+            rule_file=RULE_FILE,
+            source_db="sqlite:///:memory:",
+            snapshot_source="test",
+        )
+
+    result = payload["results"][0]
+    assert result["matched_rule_id"] == "NHTSA_RESEARCH_SIDE_POLE_FMVSS_POLE_IMPACT_32KPH"
+    assert result["canonical_rule_id"] == "NHTSA_RESEARCH_SIDE_POLE_FMVSS_POLE_IMPACT_32KPH"
+    assert payload["summary"]["known_false_positive_count"] == 0
+
+
+def test_classifier_prioritizes_sled_over_full_vehicle_oblique(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    session = _session(tmp_settings)
+    with session as db:
+        db.add(
+            CrashTest(
+                test_no=4,
+                test_type="RMDB INTO FRONT 15 DEGREE STATIONARY VEHICLE, OVERLAP=35 PERCENT",
+                test_date_parse_status="parsed",
+                contractor_study_title="SLED BUCK RESEARCH AND DEVELOPMENT OFFSET TEST",
+                test_configuration="SLED WITH VEHICLE BODY",
+                impact_angle=15,
+                closing_speed=88.0,
+            )
+        )
+        db.commit()
+        payload = classify_database(
+            db,
+            rule_file=RULE_FILE,
+            source_db="sqlite:///:memory:",
+            snapshot_source="test",
+        )
+
+    result = payload["results"][0]
+    assert result["matched_rule_id"] == "OCCUPANT_PERFORMANCE_FRONTAL_OBLIQUE_SLED_RESEARCH"
+    assert "SLED" in result["canonical_rule_id"]
+    assert payload["summary"]["known_false_positive_count"] == 0
+
+
 def _session(tmp_settings) -> Session:  # type: ignore[no-untyped-def]
     ensure_schema(create_engine_for_settings(tmp_settings))
     return create_session_factory(tmp_settings)()

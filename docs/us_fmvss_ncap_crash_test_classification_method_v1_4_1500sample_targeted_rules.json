@@ -1,8 +1,8 @@
 {
   "document_type": "classification_method",
-  "title": "U.S. FMVSS/NCAP Crash Test Classification Method v1.4.0-rc1 - 1500 Sample Targeted Rules",
-  "title_ko": "미국 FMVSS/NCAP 충돌시험 분류 기준 v1.4.0-rc1 - 1500건 확장 targeted rule",
-  "version": "1.4.0-rc1",
+  "title": "U.S. FMVSS/NCAP Crash Test Classification Method v1.4.1 - Targeted Classification Repair",
+  "title_ko": "미국 FMVSS/NCAP 충돌시험 분류 기준 v1.4.1 - targeted classification repair",
+  "version": "1.4.1",
   "created_at": "2026-04-30",
   "language": [
     "ko",
@@ -1001,11 +1001,20 @@
       "specific_test_type": "US_NCAP_SIDE_POLE_20MPH_75DEG_25CM",
       "priority": 100,
       "match": {
-        "required_text_any": [
-          "ncap",
-          "5-star",
-          "side pole",
-          "rigid pole"
+        "required_text_any_groups": [
+          [
+            "ncap",
+            "new car assessment",
+            "new car assessment test",
+            "5-star",
+            "5 star"
+          ],
+          [
+            "side pole",
+            "rigid pole",
+            "vehicle into pole",
+            "pole barrier"
+          ]
         ],
         "required_direction": [
           "side",
@@ -5674,7 +5683,9 @@
       "match": {
         "test_type_any": [
           "OCCUPANT PERFORMANCE TEST",
-          "RESEARCH"
+          "RESEARCH",
+          "RMDB INTO FRONT",
+          "OMDB INTO FRONT"
         ],
         "test_configuration_any": [
           "SLED WITH VEHICLE BODY",
@@ -5687,6 +5698,8 @@
           "15 degree",
           "15deg",
           "15 deg",
+          "sled buck",
+          "sled with vehicle body",
           "occupant performance"
         ],
         "speed_range_kmh": [
@@ -6063,6 +6076,94 @@
       "added_in_version": "1.2.0",
       "validation_motivation": "1000건 검증 미분류 그룹: OTHER / VEHICLE INTO VEHICLE 8건, FMVSS 301 nominal이 아닌 후방 충돌",
       "rule_family_id": "NHTSA_RESEARCH_REAR_IMPACT_VEHICLE_TO_VEHICLE_NON_301",
+      "specificity_level": "research_specific",
+      "fallback_used": false
+    },
+    {
+      "rule_id": "NHTSA_RESEARCH_SIDE_POLE_FMVSS_POLE_IMPACT_32KPH",
+      "label_ko": "NHTSA research side pole impact with FMVSS pole title evidence",
+      "program_domain": "NHTSA_RESEARCH",
+      "standard_or_program": "RESEARCH_SIDE_POLE",
+      "physical_mode": "SIDE_POLE_RESEARCH",
+      "specific_test_type": "NHTSA_RESEARCH_SIDE_POLE_FMVSS_POLE_IMPACT_32KPH",
+      "priority": 86,
+      "match": {
+        "test_type_any": [
+          "RESEARCH",
+          "RESEARCH SAFETY VEHICLE TEST"
+        ],
+        "test_configuration_any": [
+          "VEHICLE INTO POLE"
+        ],
+        "required_text_any_groups": [
+          [
+            "fmvss pole impact",
+            "pole impact",
+            "vehicle into pole"
+          ],
+          [
+            "left side",
+            "right side",
+            "side"
+          ]
+        ],
+        "required_direction": [
+          "side",
+          "lateral"
+        ],
+        "required_barrier_type": [
+          "rigid_pole"
+        ],
+        "speed_range_kmh": [
+          28,
+          36
+        ],
+        "angle_near_any": [
+          {
+            "value_deg": 75,
+            "tolerance_deg": 5
+          },
+          {
+            "value_deg": 270,
+            "tolerance_deg": 5
+          },
+          {
+            "value_deg": 285,
+            "tolerance_deg": 5
+          }
+        ],
+        "forbidden_text_any": [
+          "ncap",
+          "new car assessment",
+          "fmvss 214",
+          "571.214",
+          "sled",
+          "oop",
+          "out of position"
+        ]
+      },
+      "canonical_parameters": {
+        "speed_kmh": 32.0,
+        "speed_mph": 20.0,
+        "speed_condition": "approx_or_range",
+        "component_test": false,
+        "impact_direction": "side",
+        "barrier_type": "rigid_pole",
+        "pole_diameter_mm": null,
+        "impact_angle_deg": 75,
+        "angle_reference": "vehicle_yaw_to_pole_or_database_alias",
+        "test_vehicle_state": "moving_or_pulled_sideways",
+        "evaluation_purpose": "side_impact_research",
+        "research_or_rulemaking_status": "research"
+      },
+      "applicability": {},
+      "notes_ko": "Stage F v1.4.1: RESEARCH / VEHICLE INTO POLE rows with FMVSS pole title text are not NCAP side-pole confirmations unless NCAP/New Car Assessment evidence is present.",
+      "source_refs": [
+        "stage_f_v1_4_1_targeted_rule_analysis"
+      ],
+      "added_in_version": "1.4.1",
+      "validation_motivation": "Repair 8 side-pole over-confirmed hard cases by routing research FMVSS pole-title rows away from NCAP side pole.",
+      "rule_family_id": "NHTSA_RESEARCH_SIDE_POLE_FMVSS_POLE_IMPACT_32KPH",
       "specificity_level": "research_specific",
       "fallback_used": false
     },
