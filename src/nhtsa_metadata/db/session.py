@@ -67,6 +67,12 @@ def _ensure_additive_columns(engine: Engine) -> None:
             "vax_crush_distance_min": "NUMERIC",
             "vax_crush_distance_max": "NUMERIC",
             "has_load_cell_barrier": "BOOLEAN NOT NULL DEFAULT 0",
+            "load_cell_barrier_classification_ids_json": "JSON",
+            "load_cell_barrier_families_json": "JSON",
+            "load_cell_barrier_config_version": "VARCHAR(120)",
+            "load_cell_barrier_channel_count": "INTEGER",
+            "load_cell_barrier_force_channel_count": "INTEGER",
+            "load_cell_barrier_moment_channel_count": "INTEGER",
         },
     }
     with engine.begin() as connection:

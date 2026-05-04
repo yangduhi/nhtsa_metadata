@@ -229,6 +229,14 @@ def _summary_out(summary: TestFilterSummary) -> dict[str, object]:
         "vax_crush_distance_min": _number_out(summary.vax_crush_distance_min),
         "vax_crush_distance_max": _number_out(summary.vax_crush_distance_max),
         "has_load_cell_barrier": summary.has_load_cell_barrier,
+        "load_cell_barrier_classifications": (
+            summary.load_cell_barrier_classification_ids_json or []
+        ),
+        "load_cell_barrier_families": summary.load_cell_barrier_families_json or [],
+        "load_cell_barrier_config_version": summary.load_cell_barrier_config_version,
+        "load_cell_barrier_channel_count": summary.load_cell_barrier_channel_count,
+        "load_cell_barrier_force_channel_count": summary.load_cell_barrier_force_channel_count,
+        "load_cell_barrier_moment_channel_count": summary.load_cell_barrier_moment_channel_count,
         "has_uds_or_tdms_package": summary.has_uds_or_tdms_package,
     }
 

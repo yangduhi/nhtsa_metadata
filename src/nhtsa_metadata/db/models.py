@@ -476,6 +476,75 @@ class InstrumentationChannelDetail(LineageMixin, TimestampMixin, Base):
     detail_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
 
 
+class BarrierLoadCellClassification(TimestampMixin, Base):
+    __tablename__ = "barrier_load_cell_classification"
+    __table_args__ = (UniqueConstraint("test_no", "config_version", "classification_id"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    barrier_id: Mapped[int | None] = sa_mapped_column(ForeignKey("barriers.id"), nullable=True)
+    config_version: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classification_id: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    family: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    raw_barrier_shape: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_barrier_shape_key: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    shape_alias_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    shape_alias_confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    shape_alias_is_conditional: Mapped[bool] = sa_mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    row_count: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    col_count: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    row_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    col_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    pole_index_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    force_channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    moment_channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    missing_expected_channels_json: Mapped[list[dict[str, Any]] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    duplicate_channels_json: Mapped[list[dict[str, Any]] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    occupancy_map_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+    mask_summary_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class BarrierLoadCellChannelMap(TimestampMixin, Base):
+    __tablename__ = "barrier_load_cell_channel_map"
+    __table_args__ = (
+        UniqueConstraint("classification_id", "instrumentation_channel_id"),
+    )
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    classification_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("barrier_load_cell_classification.id"), nullable=False, index=True
+    )
+    test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    instrumentation_channel_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("instrumentation_channels.id"), nullable=False
+    )
+    curve_no: Mapped[int] = sa_mapped_column(Integer, nullable=False)
+    sensor_attachment_raw: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    instrumentation_commentary: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    parsed_row: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    parsed_col: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    parsed_row_letter: Mapped[str | None] = sa_mapped_column(String(8), nullable=True)
+    parsed_pole_index: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    quantity_type: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    raw_axis: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    canonical_axis: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    unit_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    generated_loma_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    mask_flags_json: Mapped[list[str] | None] = sa_mapped_column(SAJSON, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
 class InjuryMetric(LineageMixin, TimestampMixin, Base):
     __tablename__ = "injury_metrics"
 
@@ -575,6 +644,24 @@ class TestFilterSummary(TimestampMixin, Base):
     vax_crush_distance_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
     vax_crush_distance_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
     has_load_cell_barrier: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    load_cell_barrier_classification_ids_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    load_cell_barrier_families_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    load_cell_barrier_config_version: Mapped[str | None] = sa_mapped_column(
+        String(120), nullable=True
+    )
+    load_cell_barrier_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
+    load_cell_barrier_force_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
+    load_cell_barrier_moment_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
     has_uds_or_tdms_package: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -793,6 +880,8 @@ class FieldCoverageSnapshot(TimestampMixin, Base):
 __all__ = [
     "AssetSummary",
     "Barrier",
+    "BarrierLoadCellChannelMap",
+    "BarrierLoadCellClassification",
     "Base",
     "CanonicalRowSource",
     "ClassificationAdjudication",

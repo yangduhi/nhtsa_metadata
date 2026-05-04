@@ -15,6 +15,8 @@ def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-unt
     assert "discovery_authority_decisions" in table_names
     assert "classification_adjudication" in table_names
     assert "test_classification_candidates" in table_names
+    assert "barrier_load_cell_classification" in table_names
+    assert "barrier_load_cell_channel_map" in table_names
 
     unique_constraints = inspect(engine).get_unique_constraints("discovery_manifest_rows")
     unique_sets = {tuple(item["column_names"]) for item in unique_constraints}
@@ -62,7 +64,27 @@ def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-unt
         "vax_crush_distance_min",
         "vax_crush_distance_max",
         "has_load_cell_barrier",
+        "load_cell_barrier_classification_ids_json",
+        "load_cell_barrier_families_json",
+        "load_cell_barrier_config_version",
+        "load_cell_barrier_channel_count",
+        "load_cell_barrier_force_channel_count",
+        "load_cell_barrier_moment_channel_count",
     } <= summary_columns
+    load_cell_columns = {
+        column["name"]
+        for column in inspect(engine).get_columns("barrier_load_cell_classification")
+    }
+    assert {
+        "test_no",
+        "config_version",
+        "classification_id",
+        "normalized_barrier_shape_key",
+        "shape_alias_rule_id",
+        "channel_count",
+        "force_channel_count",
+        "moment_channel_count",
+    } <= load_cell_columns
 
     downgrade_base(database_url)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}

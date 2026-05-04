@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from nhtsa_metadata.db.models import (
     AssetSummary,
     Barrier,
+    BarrierLoadCellChannelMap,
+    BarrierLoadCellClassification,
     CanonicalRowSource,
     CrashTest,
     DeformationMeasurement,
@@ -52,6 +54,8 @@ MODEL_BY_TABLE = {
 CHILD_MODELS = [
     CanonicalRowSource,
     AssetSummary,
+    BarrierLoadCellChannelMap,
+    BarrierLoadCellClassification,
     TestFacet,
     TestFilterSummary,
     FieldCoverageSnapshot,

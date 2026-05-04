@@ -57,9 +57,28 @@ range overlaps the requested range. The promoted vehicle spec fields are:
 - `wheelbase`
 - `vax_crush_distance`
 
-`has_load_cell_barrier` is derived from canonical barrier shape and preserved raw
-barrier shape/commentary text. It is intentionally separate from instrumentation
-load-cell sensor channels.
+`has_load_cell_barrier` is derived first from the v2.2.2 barrier load-cell
+classification read model when classification rows exist. The classifier uses
+canonical `barriers` plus preserved raw barrier shape/commentary and
+`instrumentation_channels` attachment/quantity metadata. It applies
+shape-normalized rules for:
+
+- `legacy_4x9_us_ncap`
+- `high_res_8x16_128`
+- `partial_8x16_127_missing_one_force_channel`
+- `extended_height_10x16_160`
+- `advanced_11x16_128_active`
+- `advanced_11x16_176_full`
+- `side_pole_load_cell_8`
+
+For DBs that do not yet have load-cell classification rows, the summary keeps
+the older conservative barrier shape/commentary fallback. Load-cell barrier
+classification remains distinct from non-barrier dummy/body/seat-belt load-cell
+instrumentation.
+
+`test_filter_summary` also exposes load-cell classification ids, families,
+config version, total channel count, force channel count, and moment channel
+count for downstream filter UI/API use.
 
 ## Read Model Policy
 

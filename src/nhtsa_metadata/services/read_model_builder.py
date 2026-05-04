@@ -24,6 +24,7 @@ from nhtsa_metadata.db.models import (
     TestParticipant,
     Vehicle,
 )
+from nhtsa_metadata.services.barrier_load_cell_classifier import BarrierLoadCellClassifier
 from nhtsa_metadata.services.scope import is_in_scope_test_record
 
 
@@ -41,6 +42,8 @@ class ReadModelBuilder:
             delete(TestClassification).where(TestClassification.test_id == test.id)
         )
         self.session.execute(delete(AssetSummary).where(AssetSummary.test_id == test.id))
+        load_cell_classifier = BarrierLoadCellClassifier(self.session)
+        load_cell_classifier.clear_for_test(test.test_no)
         if not is_in_scope_test_record(
             test.test_date, test.test_date_parse_status, self.min_test_date
         ):
@@ -60,6 +63,7 @@ class ReadModelBuilder:
         impact_direction = _impact_direction(impact_angle)
         counterparty_kind = _counterparty_kind(participants)
         test_family = _test_family(test, impact_direction, counterparty_kind)
+        load_cell_summary = load_cell_classifier.rebuild_for_test(test.test_no)
         self.session.add(
             TestFilterSummary(
                 test_id=test.id,
@@ -105,7 +109,18 @@ class ReadModelBuilder:
                 vax_crush_distance_max=_numeric_max_or_none(
                     vehicle.vax_crush_distance for vehicle in vehicles
                 ),
-                has_load_cell_barrier=_has_load_cell_barrier(barriers),
+                has_load_cell_barrier=bool(load_cell_summary.classification_ids)
+                or _has_load_cell_barrier(barriers),
+                load_cell_barrier_classification_ids_json=load_cell_summary.classification_ids,
+                load_cell_barrier_families_json=load_cell_summary.families,
+                load_cell_barrier_config_version=load_cell_summary.config_version
+                if load_cell_summary.classification_ids
+                else None,
+                load_cell_barrier_channel_count=load_cell_summary.channel_count or None,
+                load_cell_barrier_force_channel_count=load_cell_summary.force_channel_count
+                or None,
+                load_cell_barrier_moment_channel_count=load_cell_summary.moment_channel_count
+                or None,
                 has_uds_or_tdms_package=bool(
                     {"uds", "tdms"} & {kind.lower() for kind in asset_kinds}
                     or {"UDS", "TDMS"} & asset_subtypes
@@ -159,6 +174,10 @@ class ReadModelBuilder:
                 _add(facet_counts, "asset_kind", value)
             if summary.has_uds_or_tdms_package:
                 _add(facet_counts, "data_package_subtype", "UDS_OR_TDMS")
+            for value in summary.load_cell_barrier_classification_ids_json or []:
+                _add(facet_counts, "load_cell_barrier_classification", value)
+            for value in summary.load_cell_barrier_families_json or []:
+                _add(facet_counts, "load_cell_barrier_family", value)
         self._add_grouped_facets(
             facet_counts,
             TestClassification.source_test_configuration_key,
