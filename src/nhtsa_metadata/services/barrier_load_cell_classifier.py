@@ -21,7 +21,7 @@ from nhtsa_metadata.db.models import (
 DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parents[3]
     / "docs"
-    / "nhtsa_barrier_load_cell_classification_config_v2.2.2.json"
+    / "nhtsa_barrier_load_cell_classification_config_v2.2.3.json"
 )
 
 LEGACY_4X9_RE = re.compile(r"^LOAD CELL (?P<row_letter>[A-D])(?P<col>[1-9])$")
@@ -31,7 +31,7 @@ POLE_ATTACHMENT_RE = re.compile(r"^POLE$")
 POLE_COMMENTARY_RE = re.compile(r"LOAD CELL (?P<pole_index>\d+)")
 WHITESPACE_RE = re.compile(r"\s+")
 
-CONFIG_VERSION_FALLBACK = "2.2.2-db2011plus-shape-normalized-metadata-explicit-final"
+CONFIG_VERSION_FALLBACK = "2.2.3-db2011plus-stage-l-read-model-integration-final"
 WALL_FAMILY = "frontal_or_flat_load_cell_wall"
 POLE_FAMILY = "side_pole_load_cell_barrier"
 MINIMAL_RULES: tuple[dict[str, str], ...] = (

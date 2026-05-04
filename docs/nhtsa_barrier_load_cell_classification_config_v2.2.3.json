@@ -1,0 +1,1442 @@
+{
+  "meta_info": {
+    "title": "NHTSA Barrier Load-Cell Instrumentation Classification Configuration",
+    "version": "2.2.3-db2011plus-stage-l-read-model-integration-final",
+    "last_updated": "2026-05-03",
+    "status": "final_project_configuration_machine_executable_validated_with_db_read_model_contract",
+    "scope": "Barrier-side load-cell metadata classification for the in-repo 2011+ metadata-only catalog. Includes flat/load-cell wall barriers and side pole load-cell barriers.",
+    "not_a_single_official_nhtsa_standard": true,
+    "supersedes": "NHTSA Barrier Load-Cell Instrumentation Classification Configuration v2.2.2-db2011plus-shape-normalized-metadata-explicit-final",
+    "primary_design_change": "Keep the v2.2.2 classification rules and coverage unchanged; add the Stage L DB derived read-model integration contract and explicit unit-only quantity inference policy required to reproduce full DB read-only validation.",
+    "validation_status": {
+      "result": "PASS",
+      "validated_database": "data/full_2011plus_metadata_only_refresh_2026-05-03.sqlite",
+      "mode": "strict machine execution with shape_normalization_policy applied before rule matching",
+      "candidate_tests": 1137,
+      "classified_tests": 1137,
+      "unclassified_tests": 0,
+      "raw_shape_exact_match_without_alias_layer_unclassified_tests": 10,
+      "notes": "Expected summary counts and channel totals match v2.2.1/v2.2.2 rules; live NHTSA API not used."
+    },
+    "stage_l_delta": {
+      "classification_rules_changed": false,
+      "classification_counts_changed": false,
+      "coverage_changed": false,
+      "added_contracts": [
+        "DB derived read-model integration contract",
+        "unit-only quantity inference policy",
+        "test_filter_summary reflection fields"
+      ]
+    }
+  },
+  "source_policy": {
+    "local_database": "data/full_2011plus_metadata_only_refresh_2026-05-03.sqlite",
+    "database_scope": "2011+ metadata-only catalog; no live NHTSA API dependency for classification closure.",
+    "raw_loma_string_available_in_db": false,
+    "primary_db_fields": [
+      "barriers.shape",
+      "SENTYPD",
+      "SENATTD",
+      "AXISD",
+      "YTYPE",
+      "YUNITSD",
+      "INSCOM",
+      "sensor_attachment",
+      "sensor_axis",
+      "unit_raw"
+    ],
+    "canonical_loma_generation": {
+      "enabled": true,
+      "used_after_primary_classification": true,
+      "used_for_primary_db_matching": false,
+      "reason": "Current DB does not store ISO-MME/LOMA-style names; names such as 00LOMA110100FO1P must be generated from parsed metadata if needed."
+    },
+    "excluded_from_barrier_load_cell_classification": [
+      "dummy/body load cells where no barrier participant exists",
+      "neck load cells",
+      "femur load cells",
+      "lumbar spine load cells",
+      "abdomen load cells",
+      "face load cells in sled/body tests without barrier row"
+    ],
+    "strict_machine_execution_requires_shape_normalization": true,
+    "shape_normalization_applies_before_rule_matching": true,
+    "unconditional_other_shape_aliasing_forbidden": true,
+    "stage_l_scope": "Metadata-level classification plus DB evidence-lineage/read-model reflection closure. Waveform parsing, per-test NCAP PDF datasheet geometry validation, and report-specific physical orientation validation remain out of scope."
+  },
+  "shape_normalization_policy": {
+    "purpose": "Normalize DB raw barriers.shape values before applying classification rules. The v2.2.0 rules are semantically sufficient, but strict exact matching against raw barriers.shape leaves 10 alias cases unclassified. v2.2.1 makes the alias layer explicit.",
+    "apply_before_classification_rules": true,
+    "raw_shape_preprocessing": {
+      "trim": true,
+      "uppercase": true,
+      "collapse_internal_whitespace": true,
+      "preserve_raw_value_in_output": true
+    },
+    "match_field_for_rules": "normalized_barrier_shape_key",
+    "rule_field": "shape_match.allowed_normalized_keys",
+    "output_fields_required": [
+      "raw_barrier_shape",
+      "normalized_barrier_shape_key",
+      "shape_alias_rule_id",
+      "shape_alias_confidence",
+      "shape_alias_evidence",
+      "shape_alias_is_conditional"
+    ],
+    "unconditional_aliases": [
+      {
+        "alias_id": "load_cell_barrier_wall_unconditional",
+        "normalized_barrier_shape_key": "LOAD_CELL_BARRIER",
+        "raw_values": [
+          "LOAD CELL BARRIER",
+          "8 X 16 + 6 LOAD CELL BARRIER",
+          "8 X 16 LOAD CELL BARRIER"
+        ],
+        "allowed_families": [
+          "frontal_or_flat_load_cell_wall"
+        ],
+        "rationale": "All listed raw values explicitly indicate a load-cell barrier wall. Final assignment is still controlled by attachment pattern and occupancy signature."
+      },
+      {
+        "alias_id": "pole_barrier_unconditional",
+        "normalized_barrier_shape_key": "POLE",
+        "raw_values": [
+          "POLE"
+        ],
+        "allowed_families": [
+          "side_pole_load_cell_barrier"
+        ],
+        "rationale": "POLE is the DB raw shape for side pole load-cell barrier tests."
+      }
+    ],
+    "conditional_aliases": [
+      {
+        "alias_id": "flat_barrier_legacy_4x9_load_cell",
+        "raw_values": [
+          "FLAT BARRIER"
+        ],
+        "normalized_barrier_shape_key": "FLAT_BARRIER_LEGACY_LOAD_CELL",
+        "allowed_rules": [
+          "legacy_4x9_us_ncap"
+        ],
+        "conditions_all": [
+          "sensor_type is LOAD CELL",
+          "attachment pattern matches ^LOAD CELL (?P<row_letter>[A-D])(?P<col>[1-9])$",
+          "observed force channel count equals 36",
+          "row letters are A-D and columns are 1-9",
+          "no pole attachment pattern is present for the same barrier participant"
+        ],
+        "observed_current_db": {
+          "test_count": 2,
+          "test_numbers": [
+            9662,
+            9989
+          ]
+        },
+        "do_not_global_alias_raw_shape": true,
+        "rationale": "FLAT BARRIER is a generic raw shape; only legacy 4x9 load-cell attachment occupancy makes it a load-cell wall case."
+      },
+      {
+        "alias_id": "other_high_resolution_load_cell_barrier_by_evidence",
+        "raw_values": [
+          "OTHER"
+        ],
+        "normalized_barrier_shape_key": "OTHER_LOAD_CELL_BARRIER_REVIEWED",
+        "allowed_rules": [
+          "extended_height_10x16_160"
+        ],
+        "conditions_all": [
+          "sensor_type is LOAD CELL",
+          "attachment pattern matches ^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+          "observed force channel count equals 160",
+          "observed row range is 2-11 and observed column range is 1-16",
+          "title/commentary/INSCOM or reviewed metadata contains load-cell barrier evidence"
+        ],
+        "observed_current_db": {
+          "test_count": 1,
+          "test_numbers": [
+            8603
+          ]
+        },
+        "do_not_global_alias_raw_shape": true,
+        "rationale": "OTHER is not a load-cell barrier shape by itself. It may be accepted only when independent title/commentary evidence and row/column occupancy both match a known load-cell wall rule."
+      }
+    ],
+    "forbidden_global_aliases": [
+      {
+        "raw_shape": "OTHER",
+        "forbidden_normalized_key": "LOAD_CELL_BARRIER",
+        "reason": "OTHER is too broad; accepting it globally would create false positives outside reviewed load-cell-barrier cases."
+      },
+      {
+        "raw_shape": "FLAT BARRIER",
+        "forbidden_normalized_key": "LOAD_CELL_BARRIER",
+        "reason": "FLAT BARRIER is generic; accept it only for the legacy 4x9 load-cell occupancy signature."
+      }
+    ],
+    "db2011plus_alias_cases_required_for_v2_2_1_closure": [
+      {
+        "raw_barrier_shape": "8 X 16 LOAD CELL BARRIER",
+        "test_count": 7,
+        "assigned_rule": "advanced_11x16_128_active",
+        "test_numbers": [
+          8066,
+          8071,
+          8077,
+          8091,
+          8100,
+          8151,
+          8155
+        ],
+        "evidence": "128 force channels, active rows 4-11, columns 1-16"
+      },
+      {
+        "raw_barrier_shape": "OTHER",
+        "test_count": 1,
+        "assigned_rule": "extended_height_10x16_160",
+        "test_numbers": [
+          8603
+        ],
+        "evidence": "high-resolution load-cell barrier evidence in reviewed metadata plus 160 force channels, rows 2-11, columns 1-16"
+      },
+      {
+        "raw_barrier_shape": "FLAT BARRIER",
+        "test_count": 2,
+        "assigned_rule": "legacy_4x9_us_ncap",
+        "test_numbers": [
+          9662,
+          9989
+        ],
+        "evidence": "legacy LOAD CELL A-D / columns 1-9 pattern, 36 force channels"
+      }
+    ]
+  },
+  "reference_status_levels": {
+    "official_reference": "Supported by public NHTSA documents or NHTSA research material.",
+    "db_observed": "Observed in the local 2011+ metadata-only DB review.",
+    "dataset_inferred": "Inferred from local DB patterns; requires report-specific verification for physical geometry claims.",
+    "external_candidate": "Kept only as a possible external/report-specific candidate; not observed in the current local DB.",
+    "deprecated_or_rejected": "Rejected for this DB/configuration because it is unsafe, unsupported, or overly broad."
+  },
+  "physical_specifications": {
+    "unit_system": {
+      "length": "mm",
+      "force": "kN",
+      "moment": "kN*m"
+    },
+    "geometry_source_priority": [
+      "test_report_datasheet_geometry",
+      "barriers.shape plus parsed attachment occupancy",
+      "known NHTSA research reference geometry",
+      "project canonical default"
+    ],
+    "known_reference_geometries": {
+      "legacy_4x9_us_ncap": {
+        "rows": 4,
+        "cols": 9,
+        "width_mm": 2108.2,
+        "height_mm": 984.25,
+        "source_status": "official_reference"
+      },
+      "high_res_8x16": {
+        "rows": 8,
+        "cols": 16,
+        "width_mm": 2000.0,
+        "height_mm": 1000.0,
+        "cell_pitch_mm": 125.0,
+        "source_status": "official_reference"
+      },
+      "high_res_8x16_plus_6_partial_row": {
+        "base_rows": 8,
+        "base_cols": 16,
+        "additional_partial_row_cell_count": 6,
+        "cell_pitch_mm": 125.0,
+        "source_status": "official_reference_and_db_observed"
+      }
+    },
+    "cell_geometry_policy": {
+      "do_not_assume_all_reports_use_identical_cell_face_dimensions": true,
+      "canonical_pitch_mm": 125.0,
+      "use_cell_face_gap_pitch_separately_when_reported": true,
+      "required_output_metadata": [
+        "geometry_source",
+        "rows_observed",
+        "cols_observed",
+        "row_range_observed",
+        "col_range_observed",
+        "cell_pitch_mm_or_null",
+        "physical_width_mm_or_null",
+        "physical_height_mm_or_null"
+      ]
+    }
+  },
+  "coordinate_and_orientation_policy": {
+    "principle": "Do not treat raw DB row numbering as a universal bottom-to-top physical coordinate. Store raw row/column indices and a separately transformed canonical analysis frame.",
+    "raw_frame": {
+      "source": "DB/report metadata and NHTSA data coordinate conventions",
+      "row_orientation": "test_report_or_dataset_specific",
+      "column_orientation": "test_report_or_dataset_specific",
+      "do_not_hardcode_origin": "Bottom-Left Row 01 Col 01"
+    },
+    "canonical_analysis_frame": {
+      "origin": "bottom_left_after_verified_transform",
+      "row_index": "zero_based_bottom_to_top_after_transform",
+      "col_index": "zero_based_left_to_right_after_transform",
+      "x": "compression_positive_after_sign_normalization",
+      "y": "project_defined_lateral_axis_after_transform",
+      "z": "positive_up_after_transform"
+    },
+    "orientation_validation": {
+      "allowed_methods": [
+        "test_report_datasheet",
+        "known barrier_shape geometry",
+        "occupancy map row/column extents",
+        "physically plausible AHOF/centroid after sign/orientation transform"
+      ],
+      "forbidden_methods": [
+        "blind vertical flip based only on passenger-car centroid threshold",
+        "classifying Row 11 as auxiliary solely by row number"
+      ]
+    }
+  },
+  "channel_identifier_policy": {
+    "raw_db_classification": {
+      "sensor_type_filter": "sensor_type == LOAD CELL or SENTYPD indicating LOAD CELL",
+      "barrier_participant_required": true,
+      "barrier_shape_field": "barriers.shape",
+      "attachment_field_preferred": "sensor_attachment",
+      "attachment_field_raw": "SENATTD",
+      "axis_field_preferred": "sensor_axis",
+      "axis_field_raw": "AXISD",
+      "quantity_fields": [
+        "YTYPE",
+        "YUNITSD",
+        "unit_raw"
+      ],
+      "commentary_field": "INSCOM"
+    },
+    "attachment_parsers": {
+      "legacy_4x9": "^LOAD CELL (?P<row_letter>[A-D])(?P<col>[1-9])$",
+      "row_column_wall": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "pole_modern": "^LOAD CELL POLE (?P<pole_index>\\d+)$",
+      "pole_legacy_attachment": "^POLE$",
+      "pole_legacy_inscom": "LOAD CELL (?P<pole_index>\\d+)"
+    },
+    "generated_loma_name": {
+      "pattern": "^(?P<object>\\d{2})(?P<device>LOMA)(?P<row>\\d{2})(?P<col>\\d{2})(?P<fine>\\d{2})(?P<quantity>FO|MO)(?P<axis>[123])(?P<polarity>[PN])$",
+      "example": "00LOMA110100FO1P",
+      "parsed_example": {
+        "object": "00",
+        "device": "LOMA",
+        "row": 11,
+        "col": 1,
+        "fine": "00",
+        "quantity": "FO",
+        "axis": 1,
+        "polarity": "P"
+      },
+      "status": "generated_canonical_name_only_not_raw_db_key"
+    }
+  },
+  "quantity_mapping_policy": {
+    "force_quantity_detection": {
+      "required_quantity": "FORCE",
+      "accepted_units": [
+        "kN",
+        "N",
+        "lbf",
+        "unit_raw_force_equivalent"
+      ],
+      "normalization_target_unit": "kN"
+    },
+    "moment_quantity_detection": {
+      "accepted_units": [
+        "kN*m",
+        "N*m",
+        "lbf*ft",
+        "unit_raw_moment_equivalent"
+      ],
+      "normalization_target_unit": "kN*m",
+      "moment_channels_optional": true
+    },
+    "axis_mapping": {
+      "preserve_raw_axis_first": true,
+      "wall_default_candidates": {
+        "FO1_or_force_axis_1": "Fx_candidate",
+        "MO2_or_moment_axis_2": "My_candidate",
+        "MO3_or_moment_axis_3": "Mz_candidate"
+      },
+      "pole_default_candidates": {
+        "force_axis": "preserve_raw_axis; define canonical pole-normal only after report/axis validation"
+      },
+      "requires_sign_validation": true
+    }
+  },
+  "classification_strategy": {
+    "do_not_use_count_only": true,
+    "primary_features": [
+      "normalized_barrier_shape_key derived from barriers.shape",
+      "raw barriers.shape retained for audit",
+      "sensor_attachment / SENATTD attachment pattern",
+      "parsed row/column or pole index",
+      "YTYPE/YUNITSD/unit_raw quantity",
+      "AXISD/sensor_axis",
+      "force channel count",
+      "moment channel availability",
+      "occupancy map",
+      "missing/duplicate channel map"
+    ],
+    "classification_order": [
+      "exclude non-barrier body/dummy load cells",
+      "infer quantity from YTYPE/YUNITSD/unit_raw using quantity_inference_policy",
+      "normalize raw barriers.shape to normalized_barrier_shape_key using shape_normalization_policy",
+      "reject conditional raw shape aliases unless all alias conditions are satisfied",
+      "parse attachment pattern",
+      "separate wall-grid from pole family",
+      "derive occupancy map from row/column or pole index",
+      "validate force/moment counts and row/column/pole ranges against candidate rule",
+      "apply rule precedence if multiple candidates remain",
+      "assign masks for missing, duplicate, inactive, padding, and physical cells",
+      "emit classification id plus confidence/status and shape/quantity audit fields",
+      "reflect classification and channel map into DB derived read-model tables when integration is enabled"
+    ],
+    "rule_precedence": [
+      "side_pole_load_cell_8",
+      "legacy_4x9_us_ncap",
+      "partial_8x16_127_missing_one_force_channel",
+      "advanced_11x16_176_full",
+      "extended_height_10x16_160",
+      "advanced_11x16_128_active",
+      "high_res_8x16_128"
+    ],
+    "ambiguous_128_force_wall_policy": "Do not classify 128-force-channel row/column wall tests from force count alone. Use row range, physical/active-cell mask, raw/normalized shape, and report-specific geometry when available. The high_res_8x16_128 rule remains covered_with_geometry_caveat; advanced_11x16_128_active requires the active-row/physical-wall signature.",
+    "stage_l_execution_pipeline": [
+      "raw channel/barrier metadata",
+      "quantity_inference_policy",
+      "shape_normalization_policy",
+      "attachment parsing",
+      "occupancy/mask construction",
+      "rule precedence",
+      "classification output",
+      "DB read-model reflection"
+    ]
+  },
+  "classification_rules": [
+    {
+      "id": "legacy_4x9_us_ncap",
+      "family": "frontal_or_flat_load_cell_wall",
+      "barrier_shape_allowed": [
+        "LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL (?P<row_letter>[A-D])(?P<col>[1-9])$",
+      "row_letter_to_row_index_raw": {
+        "A": 1,
+        "B": 2,
+        "C": 3,
+        "D": 4
+      },
+      "rows": 4,
+      "cols": 9,
+      "nominal_force_count": 36,
+      "classification_status": "covered",
+      "moment_channels_optional": true,
+      "physical_size_mm": {
+        "width": 2108.2,
+        "height": 984.25
+      },
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_force"
+      ],
+      "source_status": "official_reference_and_db_observed",
+      "raw_barrier_shape_examples": [
+        "LOAD CELL BARRIER",
+        "FLAT BARRIER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER",
+          "FLAT_BARRIER_LEGACY_LOAD_CELL"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 112,
+        "total_channels": 4032,
+        "force_channels": 4032,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "conditional_shape_aliases_allowed": [
+        "flat_barrier_legacy_4x9_load_cell"
+      ],
+      "observed_db_notes": {
+        "conditional_flat_barrier_alias_case_added_v2_2_1": {
+          "raw_barrier_shape": "FLAT BARRIER",
+          "test_count": 2,
+          "test_numbers": [
+            9662,
+            9989
+          ],
+          "evidence": "Legacy LOAD CELL A-D / columns 1-9 pattern, 36 force channels"
+        }
+      },
+      "occupancy_signature": {
+        "force_count": 36,
+        "row_letters": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "cols": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 112,
+        "total_channels": 4032,
+        "force_channels": 4032,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "high_res_8x16_128",
+      "family": "frontal_or_flat_load_cell_wall",
+      "barrier_shape_allowed": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "rows": 8,
+      "cols": 16,
+      "nominal_force_count": 128,
+      "observed_db_notes": {
+        "matched_tests_current_db": 2,
+        "row_offset_caveat": "Observed row range may be 3-10 in current DB; treat as covered_with_geometry_caveat until report geometry is checked."
+      },
+      "physical_size_mm": {
+        "width": 2000.0,
+        "height": 1000.0
+      },
+      "cell_pitch_mm": 125.0,
+      "row_offset_allowed": true,
+      "classification_status": "covered_with_geometry_caveat",
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_Fx"
+      ],
+      "source_status": "official_reference_and_db_observed",
+      "raw_barrier_shape_examples": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER",
+        "8 X 16 LOAD CELL BARRIER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 2,
+        "total_channels": 768,
+        "force_channels": 256,
+        "moment_channels": 512,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "occupancy_signature": {
+        "force_count": 128,
+        "unique_rows": 8,
+        "unique_cols": 16,
+        "row_range": "report_or_db_specific; current DB observed row-offset caveat",
+        "col_range": [
+          1,
+          16
+        ],
+        "requires_geometry_caveat": true
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 2,
+        "total_channels": 768,
+        "force_channels": 256,
+        "moment_channels": 512,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "partial_8x16_127_missing_one_force_channel",
+      "family": "frontal_or_flat_load_cell_wall",
+      "base_configuration": "high_res_8x16_128",
+      "barrier_shape_allowed": [
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "rows": 8,
+      "cols": 16,
+      "expected_force_count": 128,
+      "observed_force_count": 127,
+      "observed_row_range_allowed": [
+        2,
+        9
+      ],
+      "observed_col_range_allowed": [
+        1,
+        16
+      ],
+      "missing_force_cells_allowed": [
+        {
+          "row": 2,
+          "col": 16
+        }
+      ],
+      "known_current_db_test_numbers": [
+        7201,
+        7203,
+        7339,
+        7347,
+        7350,
+        7358,
+        7362,
+        7370
+      ],
+      "classification_status": "covered_with_mask",
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_Fx",
+        "missing_expected_channel",
+        "padding"
+      ],
+      "source_status": "db_observed",
+      "raw_barrier_shape_examples": [
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 8,
+        "total_channels": 1016,
+        "force_channels": 1016,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "occupancy_signature": {
+        "force_count": 127,
+        "expected_force_count": 128,
+        "unique_rows": 8,
+        "unique_cols": 16,
+        "row_range": [
+          2,
+          9
+        ],
+        "col_range": [
+          1,
+          16
+        ],
+        "missing_expected_force_cells": [
+          {
+            "row": 2,
+            "col": 16
+          }
+        ]
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 8,
+        "total_channels": 1016,
+        "force_channels": 1016,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "extended_height_10x16_160",
+      "family": "frontal_or_flat_load_cell_wall",
+      "barrier_shape_allowed": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "rows": 10,
+      "cols": 16,
+      "nominal_force_count": 160,
+      "observed_db_notes": {
+        "matched_tests_current_db": 48,
+        "observed_row_range": [
+          2,
+          11
+        ],
+        "observed_col_range": [
+          1,
+          16
+        ],
+        "conditional_other_alias_case_added_v2_2_1": {
+          "raw_barrier_shape": "OTHER",
+          "test_count": 1,
+          "test_numbers": [
+            8603
+          ],
+          "evidence": "Reviewed high-resolution load-cell barrier evidence and 160-force 10x16 occupancy signature"
+        }
+      },
+      "classification_status": "covered",
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_Fx"
+      ],
+      "source_status": "db_observed",
+      "raw_barrier_shape_examples": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER",
+        "8 X 16 LOAD CELL BARRIER",
+        "OTHER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER",
+          "OTHER_LOAD_CELL_BARRIER_REVIEWED"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 48,
+        "total_channels": 13184,
+        "force_channels": 7680,
+        "moment_channels": 5504,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "conditional_shape_aliases_allowed": [
+        "other_high_resolution_load_cell_barrier_by_evidence"
+      ],
+      "occupancy_signature": {
+        "force_count": 160,
+        "unique_rows": 10,
+        "unique_cols": 16,
+        "row_range": [
+          2,
+          11
+        ],
+        "col_range": [
+          1,
+          16
+        ]
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 48,
+        "total_channels": 13184,
+        "force_channels": 7680,
+        "moment_channels": 5504,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "advanced_11x16_128_active",
+      "family": "frontal_or_flat_load_cell_wall",
+      "barrier_shape_allowed": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "physical_rows": 11,
+      "physical_cols": 16,
+      "active_force_count": 128,
+      "observed_db_notes": {
+        "matched_tests_current_db": 96,
+        "active_rows_observed": [
+          4,
+          11
+        ],
+        "cols_observed": [
+          1,
+          16
+        ],
+        "alias_case_added_v2_2_1": {
+          "raw_barrier_shape": "8 X 16 LOAD CELL BARRIER",
+          "test_count": 7,
+          "test_numbers": [
+            8066,
+            8071,
+            8077,
+            8091,
+            8100,
+            8151,
+            8155
+          ],
+          "evidence": "128 force channels, active rows 4-11, columns 1-16"
+        }
+      },
+      "classification_status": "covered_with_active_cell_mask",
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_Fx",
+        "inactive_physical_cell"
+      ],
+      "source_status": "db_observed",
+      "raw_barrier_shape_examples": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER",
+        "8 X 16 LOAD CELL BARRIER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 96,
+        "total_channels": 22784,
+        "force_channels": 12288,
+        "moment_channels": 10496,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "occupancy_signature": {
+        "active_force_count": 128,
+        "physical_rows": 11,
+        "physical_cols": 16,
+        "active_row_range": [
+          4,
+          11
+        ],
+        "active_col_range": [
+          1,
+          16
+        ],
+        "requires_inactive_physical_cell_mask": true
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 96,
+        "total_channels": 22784,
+        "force_channels": 12288,
+        "moment_channels": 10496,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "advanced_11x16_176_full",
+      "family": "frontal_or_flat_load_cell_wall",
+      "barrier_shape_allowed": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER"
+      ],
+      "attachment_pattern": "^LOAD CELL ROW (?P<row>\\d+) COLUMN (?P<col>\\d+)$",
+      "rows": 11,
+      "cols": 16,
+      "nominal_force_count": 176,
+      "observed_db_notes": {
+        "matched_tests_current_db": 283,
+        "observed_rows": [
+          1,
+          11
+        ],
+        "observed_cols": [
+          1,
+          16
+        ],
+        "total_channels_may_be": [
+          176,
+          528
+        ],
+        "reason_total_channels_vary": "MY/MZ moment channels may be present or absent."
+      },
+      "moment_channels_optional": true,
+      "classification_status": "covered",
+      "required_masks": [
+        "physical_cell",
+        "active_channel",
+        "valid_Fx",
+        "valid_My",
+        "valid_Mz"
+      ],
+      "source_status": "db_observed",
+      "raw_barrier_shape_examples": [
+        "LOAD CELL BARRIER",
+        "8 X 16 + 6 LOAD CELL BARRIER",
+        "8 X 16 LOAD CELL BARRIER"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "LOAD_CELL_BARRIER"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 283,
+        "total_channels": 136400,
+        "force_channels": 49808,
+        "moment_channels": 86592,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "occupancy_signature": {
+        "force_count": 176,
+        "unique_rows": 11,
+        "unique_cols": 16,
+        "row_range": [
+          1,
+          11
+        ],
+        "col_range": [
+          1,
+          16
+        ]
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 283,
+        "total_channels": 136400,
+        "force_channels": 49808,
+        "moment_channels": 86592,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    },
+    {
+      "id": "side_pole_load_cell_8",
+      "family": "side_pole_load_cell_barrier",
+      "barrier_shape_allowed": [
+        "POLE"
+      ],
+      "attachment_patterns": [
+        "^LOAD CELL POLE (?P<pole_index>\\d+)$",
+        "^POLE$"
+      ],
+      "legacy_index_source": {
+        "when_attachment_is": "POLE",
+        "parse_from": "INSCOM",
+        "pattern": "LOAD CELL (?P<pole_index>\\d+)"
+      },
+      "nominal_force_count": 8,
+      "observed_force_count_allowed": [
+        6,
+        8,
+        9
+      ],
+      "observed_db_notes": {
+        "matched_tests_current_db": 588,
+        "tests_with_8_force_channels": 585,
+        "tests_with_6_force_channels": [
+          11656,
+          14604
+        ],
+        "test_with_9_force_channels_due_to_duplicate_pole_8": 14617
+      },
+      "quantity": "FORCE",
+      "axis_policy": "Preserve raw axis; do not map pole force to wall Fx without report/axis validation.",
+      "classification_status": "covered_with_mask",
+      "required_masks": [
+        "active_channel",
+        "valid_force",
+        "missing_nominal_channel",
+        "duplicate_channel"
+      ],
+      "source_status": "db_observed",
+      "raw_barrier_shape_examples": [
+        "POLE"
+      ],
+      "shape_match": {
+        "match_field": "normalized_barrier_shape_key",
+        "allowed_normalized_keys": [
+          "POLE"
+        ]
+      },
+      "observed_current_db_v2_2_1": {
+        "test_count": 588,
+        "total_channels": 4701,
+        "force_channels": 4701,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution"
+      },
+      "barrier_shape_allowed_is_legacy_raw_exact_field": true,
+      "preferred_shape_match_field": "shape_match.allowed_normalized_keys",
+      "occupancy_signature": {
+        "nominal_force_count": 8,
+        "observed_force_count_allowed": [
+          6,
+          8,
+          9
+        ],
+        "pole_indices_nominal": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "known_mask_cases": [
+          {
+            "test_no": 11656,
+            "force_channels": 6,
+            "missing_pole_indices": [
+              7,
+              8
+            ]
+          },
+          {
+            "test_no": 14604,
+            "force_channels": 6,
+            "missing_pole_indices": [
+              1,
+              2
+            ]
+          },
+          {
+            "test_no": 14617,
+            "force_channels": 9,
+            "duplicate_pole_index": 8
+          }
+        ]
+      },
+      "observed_current_db_v2_2_3": {
+        "test_count": 588,
+        "total_channels": 4701,
+        "force_channels": 4701,
+        "moment_channels": 0,
+        "application_mode": "shape-normalized strict machine execution with Stage L DB read-model integration contract"
+      }
+    }
+  ],
+  "inactive_or_external_candidate_rules": [
+    {
+      "id": "wide_8x22_176",
+      "status": "not_observed_in_current_2011plus_db",
+      "activation_policy": "Activate only when parsed row/column extent is 8x22 or report-specific geometry verifies 8x22. Do not infer from force_count=176 alone because 11x16 also has 176 cells.",
+      "source_status": "external_candidate"
+    },
+    {
+      "id": "large_lcw_288",
+      "status": "not_observed_in_current_2011plus_db",
+      "activation_policy": "Activate only with report-specific geometry or DB occupancy extent matching a 288-cell LCW.",
+      "source_status": "external_candidate"
+    }
+  ],
+  "deprecated_or_rejected_rules": [
+    {
+      "id": "count_only_force_channel_detection",
+      "reason": "Ambiguous and insufficient. Example: 176 force channels can be 11x16 or 8x22 depending on row/column extents."
+    },
+    {
+      "id": "row_11_always_auxiliary",
+      "reason": "Unsafe. Row 11 may be a physical row in observed DB wall-grid families. Classify auxiliary status from metadata/occupancy/report evidence, not row number alone."
+    },
+    {
+      "id": "moment_missing_zero_for_physics",
+      "reason": "Unsafe for CoP and stiffness calculations. Use NaN plus validity masks; zero padding is allowed only for model input with masks."
+    },
+    {
+      "id": "raw_loma_primary_parser_for_current_db",
+      "reason": "Current DB contains no raw LOMA strings. LOMA-compatible names may be generated after classification."
+    },
+    {
+      "id": "legacy_4x9_physical_size_2250x1000",
+      "reason": "Replace with NHTSA research reference geometry 2108.2 x 984.25 mm for US NCAP 4x9 LCW unless a test report states otherwise."
+    }
+  ],
+  "mask_policy": {
+    "physical_cell": "Cell exists in the declared/report-inferred physical barrier layout.",
+    "active_channel": "A measured channel exists in the DB for the cell or pole index.",
+    "valid_force": "Force channel is present, unit-normalized, and not invalidated by status/quality rules.",
+    "valid_Fx": "Wall-normal or canonical compression force channel is present after axis/sign validation.",
+    "valid_My": "Moment about canonical y axis is present after axis/sign validation.",
+    "valid_Mz": "Moment about canonical z axis is present after axis/sign validation.",
+    "missing_expected_channel": "A cell expected by the nominal geometry is absent in the observed DB channels.",
+    "inactive_physical_cell": "Physical cell exists but is not an active measured cell in the observed configuration.",
+    "duplicate_channel": "More than one channel maps to the same expected pole/cell/quantity/axis slot.",
+    "padding": "Tensor slot inserted for shape alignment, not a measured channel."
+  },
+  "tensor_policy": {
+    "preferred": "dynamic_shape_with_masks",
+    "fixed_shape_allowed": true,
+    "fixed_shape_is_model_specific_not_nhtsa_standard": true,
+    "wall_tensor_channels": [
+      "Fx",
+      "My",
+      "Mz"
+    ],
+    "pole_tensor_channels": [
+      "force_raw_axis_or_canonical_pole_normal_after_validation"
+    ],
+    "silent_crop_forbidden": true,
+    "zero_padding_allowed_only_with_padding_mask": true,
+    "moment_missing_value_for_physical_calculation": "NaN",
+    "force_missing_value_for_physical_calculation": "NaN",
+    "required_metadata": [
+      "classification_id",
+      "classification_status",
+      "rows_original",
+      "cols_original",
+      "row_range_raw",
+      "col_range_raw",
+      "row_offset_applied",
+      "col_offset_applied",
+      "geometry_source",
+      "orientation_source",
+      "axis_sign_validation_status"
+    ]
+  },
+  "calculation_policy": {
+    "total_force": {
+      "formula": "sum(valid canonical compression force channels)",
+      "exclude": [
+        "moments",
+        "invalid force channels",
+        "padding slots",
+        "duplicate channels unless explicitly resolved",
+        "non-barrier dummy/body load cells"
+      ]
+    },
+    "ahof": {
+      "formula": "sum(F_i * H_i) / sum(F_i)",
+      "requires": [
+        "valid force",
+        "height coordinate for each active physical cell",
+        "geometry source",
+        "orientation source"
+      ],
+      "note": "AHOF can be calculated from force grid and cell heights; moment channels are not required. Do not compare 4x9 and 8x16 AHOF without resolution caveat."
+    },
+    "center_of_pressure": {
+      "unit_rule": "kN*m divided by kN gives meters; multiply by 1000 before adding to mm coordinates.",
+      "index_rule": "Use zero-based canonical row/column indices after orientation transform.",
+      "z_center_mm": "z_origin_mm + (row0 + 0.5) * pitch_z_mm",
+      "y_center_mm": "y_origin_mm + (col0 + 0.5) * pitch_y_mm",
+      "z_cop_mm": "z_center_mm + sign_my * 1000 * My_kNm / Fx_kN",
+      "y_cop_mm": "y_center_mm + sign_mz * 1000 * Mz_kNm / Fx_kN",
+      "validity": [
+        "abs(Fx_kN) > threshold",
+        "valid_My and/or valid_Mz present for axis-specific CoP",
+        "local CoP offset physically plausible",
+        "axis and sign validation completed"
+      ],
+      "default_abs_Fx_kN_threshold": 0.5
+    }
+  },
+  "metadata_scaling_policy": {
+    "principle": "Do not silently rescale vehicle or barrier metadata. Store raw value, corrected value, unit inference, rule, and confidence.",
+    "vehicle_width_mm": {
+      "valid_range_mm": [
+        1200,
+        2600
+      ],
+      "if_value_gt_10000": "candidate divide_by_10 only with audit log and confidence flag"
+    },
+    "vehicle_mass_kg": {
+      "valid_range_kg": [
+        500,
+        6000
+      ],
+      "if_value_gt_10000": "try known 0.1 kg encoding or lb-to-kg conversion only if unit evidence exists; otherwise flag invalid"
+    },
+    "audit_fields_required": [
+      "field_name",
+      "raw_value",
+      "corrected_value",
+      "raw_unit_or_null",
+      "corrected_unit",
+      "correction_rule",
+      "confidence"
+    ]
+  },
+  "expected_current_db_coverage_after_rules": {
+    "database": "data/full_2011plus_metadata_only_refresh_2026-05-03.sqlite",
+    "version": "2.2.3 shape-normalized strict machine execution with Stage L DB read-model integration contract",
+    "strict_raw_barrier_shape_exact_match_without_alias_layer": {
+      "classified_tests": 1127,
+      "candidate_tests": 1137,
+      "unclassified_tests": 10,
+      "interpretation": "This is the known v2.2.0 machine-execution caveat when raw barriers.shape exact matching is used."
+    },
+    "strict_shape_normalized_rule_application": {
+      "classified_tests": 1137,
+      "candidate_tests": 1137,
+      "unclassified_tests": 0,
+      "interpretation": "This is the expected v2.2.2 result when shape_normalization_policy is applied before classification rules."
+    },
+    "flat_load_cell_wall_tests": {
+      "covered": 549,
+      "total": 549,
+      "coverage": "100%"
+    },
+    "barrier_load_cell_tests_including_pole": {
+      "covered": 1137,
+      "total": 1137,
+      "coverage": "100%"
+    },
+    "classification_summary_alias_assisted": [
+      {
+        "classification_id": "legacy_4x9_us_ncap",
+        "tests": 112,
+        "channels": 4032,
+        "force_channels": 4032,
+        "moment_channels": 0,
+        "status": "covered"
+      },
+      {
+        "classification_id": "high_res_8x16_128",
+        "tests": 2,
+        "channels": 768,
+        "force_channels": 256,
+        "moment_channels": 512,
+        "status": "covered_with_geometry_caveat"
+      },
+      {
+        "classification_id": "partial_8x16_127_missing_one_force_channel",
+        "tests": 8,
+        "channels": 1016,
+        "force_channels": 1016,
+        "moment_channels": 0,
+        "status": "covered_with_mask"
+      },
+      {
+        "classification_id": "extended_height_10x16_160",
+        "tests": 48,
+        "channels": 13184,
+        "force_channels": 7680,
+        "moment_channels": 5504,
+        "status": "covered"
+      },
+      {
+        "classification_id": "advanced_11x16_128_active",
+        "tests": 96,
+        "channels": 22784,
+        "force_channels": 12288,
+        "moment_channels": 10496,
+        "status": "covered_with_active_cell_mask"
+      },
+      {
+        "classification_id": "advanced_11x16_176_full",
+        "tests": 283,
+        "channels": 136400,
+        "force_channels": 49808,
+        "moment_channels": 86592,
+        "status": "covered"
+      },
+      {
+        "classification_id": "side_pole_load_cell_8",
+        "tests": 588,
+        "channels": 4701,
+        "force_channels": 4701,
+        "moment_channels": 0,
+        "status": "covered_with_mask"
+      }
+    ],
+    "caveat": "Coverage is metadata-level classification closure. It is not equivalent to per-test PDF datasheet geometry validation.",
+    "stage_l_validation_metadata": {
+      "candidate_tests": 1137,
+      "classified_tests": 1137,
+      "unclassified_tests": 0,
+      "total_channels": 182885,
+      "force_channels": 79781,
+      "moment_channels": 103104,
+      "db_read_model_integration_contract_added": true,
+      "quantity_unit_only_inference_policy_added": true,
+      "classification_rules_changed_from_v2_2_2": false
+    }
+  },
+  "validation_checks": [
+    "Apply shape_normalization_policy before classification rules; do not exact-match raw barriers.shape directly unless using raw alias lists explicitly.",
+    "All active classification_rules must declare classification_status explicitly; legacy_4x9_us_ncap must be covered, not implied by validator default.",
+    "Strict shape-normalized execution must classify 1,137 / 1,137 current DB barrier-side load-cell tests.",
+    "Strict raw barriers.shape exact matching without alias layer is expected to leave 10 known alias cases unclassified; this is a regression if using v2.2.2.",
+    "Do not globally alias raw shape OTHER to LOAD_CELL_BARRIER.",
+    "Do not globally alias raw shape FLAT BARRIER to LOAD_CELL_BARRIER; allow only the legacy 4x9 load-cell occupancy case.",
+    "Every classified wall-grid test must emit an occupancy map.",
+    "Every classified test with missing or duplicate expected channels must emit the corresponding mask.",
+    "Moment channel absence must remain NaN/masked for physical calculations; zero padding is allowed only for model input with masks.",
+    "Raw LOMA-compatible names must not be required for DB primary classification.",
+    "Inactive/external candidates wide_8x22_176 and large_lcw_288 must not be activated without row/column extent or report-specific evidence.",
+    "Every active classification_rules entry must include classification_status explicitly; no validator default is required.",
+    "Apply quantity_inference_policy before shape normalization; YTYPE null plus YUNITSD NEWTONS must infer FORCE.",
+    "Apply quantity_inference_policy before shape normalization; YTYPE null plus YUNITSD NEWTON-METERS must infer MOMENT.",
+    "DB read-model reflection must populate barrier_load_cell_classification and barrier_load_cell_channel_map as derived surfaces only.",
+    "test_filter_summary load-cell barrier fields must be derived from classifier output when classification rows exist.",
+    "Legacy snapshots without classification rows may use the older shape/commentary has_load_cell_barrier detector only as fallback."
+  ],
+  "metadata_explicitness_patch_v2_2_2": {
+    "changed_rule": "legacy_4x9_us_ncap",
+    "added_field": {
+      "classification_status": "covered"
+    },
+    "coverage_effect": "none",
+    "reason": "The v2.2.1 validator used covered as the expected/default status; v2.2.2 makes that value explicit for strict metadata consumers."
+  },
+  "quantity_inference_policy": {
+    "purpose": "Infer FORCE/MOMENT quantity from unit fields when YTYPE is missing. Stage L read-only validation requires this fallback to reproduce 1,137 / 1,137 closure.",
+    "apply_before_shape_normalization": true,
+    "apply_before_attachment_parsing": true,
+    "input_fields": [
+      "YTYPE",
+      "YUNITSD",
+      "unit_raw"
+    ],
+    "preserve_raw_fields": true,
+    "do_not_infer_from_channel_count_only": true,
+    "unit_only_fallback_rules": [
+      {
+        "id": "unit_only_force_newtons",
+        "when_all": {
+          "YTYPE": null,
+          "YUNITSD": "NEWTONS"
+        },
+        "inferred_quantity": "FORCE",
+        "confidence": "high",
+        "stage_l_required": true
+      },
+      {
+        "id": "unit_only_moment_newton_meters",
+        "when_all": {
+          "YTYPE": null,
+          "YUNITSD": "NEWTON-METERS"
+        },
+        "inferred_quantity": "MOMENT",
+        "confidence": "high",
+        "stage_l_required": true
+      }
+    ],
+    "accepted_unit_aliases": {
+      "force": [
+        "NEWTONS",
+        "N",
+        "KILONEWTONS",
+        "KN",
+        "LBF",
+        "POUNDS"
+      ],
+      "moment": [
+        "NEWTON-METERS",
+        "N-M",
+        "N*M",
+        "KN*M",
+        "LBF*FT"
+      ]
+    },
+    "required_output_metadata": [
+      "raw_YTYPE",
+      "raw_YUNITSD",
+      "raw_unit_raw",
+      "inferred_quantity",
+      "quantity_inference_rule_id",
+      "quantity_inference_confidence"
+    ]
+  },
+  "db_read_model_integration_contract": {
+    "purpose": "Define derived DB surfaces for Stage L integration. These tables are read-model/evidence-lineage outputs rebuilt from canonical source metadata, not a source-of-truth replacement for raw payloads.",
+    "source_of_truth_policy": {
+      "raw_payloads_remain_source_of_truth": true,
+      "classification_tables_are_derived": true,
+      "channel_map_is_rebuildable_from_instrumentation_channels_and_barriers": true
+    },
+    "derived_tables": {
+      "barrier_load_cell_classification": {
+        "grain": "one row per classified barrier load-cell test/configuration",
+        "minimum_required_columns": [
+          "test_no",
+          "classification_id",
+          "classification_family",
+          "classification_status",
+          "config_version",
+          "raw_barrier_shapes_json",
+          "normalized_barrier_shape_key",
+          "shape_alias_rule_id",
+          "shape_alias_is_conditional",
+          "rows_observed",
+          "cols_observed",
+          "row_range_raw_json",
+          "col_range_raw_json",
+          "force_channel_count",
+          "moment_channel_count",
+          "total_channel_count",
+          "missing_expected_channels_json",
+          "duplicate_channels_json",
+          "mask_summary_json",
+          "evidence_json",
+          "created_at"
+        ],
+        "lineage_required": true
+      },
+      "barrier_load_cell_channel_map": {
+        "grain": "one row per source instrumentation channel mapped into a barrier load-cell classification slot",
+        "minimum_required_columns": [
+          "test_no",
+          "curve_no",
+          "classification_id",
+          "config_version",
+          "source_payload_id",
+          "source_row_hash",
+          "sensor_attachment",
+          "sensor_axis",
+          "raw_YTYPE",
+          "raw_YUNITSD",
+          "unit_raw",
+          "inferred_quantity",
+          "quantity_inference_rule_id",
+          "row_raw",
+          "col_raw",
+          "pole_index_raw",
+          "channel_role",
+          "physical_cell",
+          "active_channel",
+          "valid_force",
+          "valid_Fx",
+          "valid_My",
+          "valid_Mz",
+          "missing_expected_channel",
+          "duplicate_channel",
+          "padding",
+          "data_status",
+          "channel_status"
+        ],
+        "lineage_required": true
+      }
+    },
+    "test_filter_summary_reflection": {
+      "fields": [
+        "load_cell_barrier_classification_ids_json",
+        "load_cell_barrier_families_json",
+        "load_cell_barrier_config_version",
+        "load_cell_barrier_channel_count",
+        "load_cell_barrier_force_channel_count",
+        "load_cell_barrier_moment_channel_count"
+      ],
+      "has_load_cell_barrier_policy": {
+        "preferred": "Use barrier_load_cell_classification rows when present.",
+        "fallback_for_legacy_snapshots": "When classification rows are absent, use the existing shape/commentary detector only as a backward-compatible detector.",
+        "fallback_must_not_override_classifier_output": true
+      }
+    },
+    "rebuild_policy": {
+      "default_verification_must_not_call_live_nhtsa_api": true,
+      "read_model_rebuild_uses_local_db_only": true,
+      "classification_config_version": "2.2.3"
+    }
+  }
+}

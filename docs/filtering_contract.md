@@ -57,7 +57,7 @@ range overlaps the requested range. The promoted vehicle spec fields are:
 - `wheelbase`
 - `vax_crush_distance`
 
-`has_load_cell_barrier` is derived first from the v2.2.2 barrier load-cell
+`has_load_cell_barrier` is derived first from the v2.2.3 barrier load-cell
 classification read model when classification rows exist. The classifier uses
 canonical `barriers` plus preserved raw barrier shape/commentary and
 `instrumentation_channels` attachment/quantity metadata. It applies

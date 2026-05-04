@@ -44,7 +44,7 @@ source of truth.
 | `restraints` | derived | Occupant-context restraint assignment. | `test_id`, `restraint_subject_kind`, `restraint_subject_semantic_hash`, `semantic_hash`. | Must keep occupant or subject context; repeated source observations attach through `canonical_row_sources`. |
 | `instrumentation_channels` | derived | Canonical channel. | Unique `(test_id, curve_no)`. | Sensor type/location/attachment/axis/unit/status are canonical columns; waveform is not parsed. |
 | `instrumentation_channel_details` | derived | Optional channel detail JSON. | FK `channel_id`. | Detail JSON is rebuildable and not source of truth. |
-| `barrier_load_cell_classification` | derived | Barrier-side load-cell family assignment from v2.2.2 shape-normalized metadata rules. | Unique `(test_no, config_version, classification_id)`. | Rebuildable from `barriers` plus `instrumentation_channels`; preserves raw barrier shape, normalized shape key, alias evidence, occupancy/mask summary, and force/moment counts. |
+| `barrier_load_cell_classification` | derived | Barrier-side load-cell family assignment from v2.2.3 shape-normalized metadata rules and DB read-model contract. | Unique `(test_no, config_version, classification_id)`. | Rebuildable from `barriers` plus `instrumentation_channels`; preserves raw barrier shape, normalized shape key, alias evidence, occupancy/mask summary, and force/moment counts. |
 | `barrier_load_cell_channel_map` | derived | Per-channel evidence surface for the selected barrier load-cell classification. | Unique `(classification_id, instrumentation_channel_id)`. | Preserves parsed row/column or pole index, raw attachment/commentary, quantity, axis, unit, generated LOMA-style name where applicable, and mask flags. |
 | `injury_metrics` | derived | Occupant injury metric. | `test_id`, optional `occupant_id`, `metric_code`. | Keeps raw and numeric parsed values. |
 | `deformation_measurements` | derived | Vehicle deformation measurement. | `test_id`, optional `vehicle_id`, `measurement_code`. | Keeps raw and numeric parsed values. |
@@ -58,7 +58,7 @@ All canonical tables derived from source rows use lineage columns where applicab
 
 | Table | Source of truth | Meaning | Key / rebuild policy |
 |---|---|---|---|
-| `test_filter_summary` | derived | One-row-per-test filter summary, including vehicle spec min/max fields, load-cell barrier flag, and v2.2.2 load-cell classification summary fields. | `test_id` and `test_no` unique; rebuildable. |
+| `test_filter_summary` | derived | One-row-per-test filter summary, including vehicle spec min/max fields, load-cell barrier flag, and v2.2.3 load-cell classification summary fields. | `test_id` and `test_no` unique; rebuildable. |
 | `test_classification` | derived | Crash family / impact direction / counterparty classification. | `test_id` and `test_no` unique; unknown must be audited. |
 | `test_facets` | derived | Global facet values and counts. | Unique `(facet_name, facet_value)`; absent `dummy_type` is accepted warning when no stable value is observed. |
 | `asset_summary` | derived | Per-test asset kind counts. | Unique `(test_id, asset_kind)`. |
