@@ -28,6 +28,7 @@ from nhtsa_metadata.services.endpoint_completeness import (
     EndpointCompletenessService,
     write_json,
 )
+from nhtsa_metadata.services.filter_db_materializer import materialize_filter_database
 from nhtsa_metadata.services.full_cover_readiness import (
     EndpointMatrixContractValidator,
     FullCoverageGapService,
@@ -557,6 +558,21 @@ def schema_rebuild_code_values(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(encoded + "\n", encoding="utf-8")
     console.print(encoded)
+
+
+@schema_app.command("materialize-filter-db")
+def schema_materialize_filter_db(
+    source_db: Annotated[Path, typer.Option("--source-db")],
+    output_db: Annotated[Path, typer.Option("--output-db")],
+    overwrite: Annotated[bool, typer.Option("--overwrite")] = False,
+) -> None:
+    payload = materialize_filter_database(
+        source_db=source_db,
+        output_db=output_db,
+        overwrite=overwrite,
+        discard_load_cell_channel_map=True,
+    )
+    console.print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2))
 
 
 @schema_app.command("classify-v1-4")

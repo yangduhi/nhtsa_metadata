@@ -12,12 +12,12 @@ from typing import Any
 
 from alembic import op
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     Numeric,
     String,
     Text,
