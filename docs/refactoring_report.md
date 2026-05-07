@@ -84,6 +84,26 @@ Updated:
   default paths and should be treated as legacy Stage F tooling.
 - CLI JSON output serialization is still repeated across commands.
 
+## Repository Handoff State
+
+- Branch: `codex/refactor-post-delivery-hardening`
+- Working tree: tracked files clean at the previous handoff checkpoint.
+- Push: not performed.
+- Main merge: not performed.
+- Registered worktree: `D:\vscode\nhtsa_metadata`
+- Live NHTSA API calls: none.
+- Raw/source payload changes: none.
+- Schema references confirmed present:
+  - `docs/db_schema.md`
+  - `docs/db_schema_contract.md`
+
+## Commits
+
+- `0994c9b docs: add refactoring baseline audit and plan`
+- `a47b0e9 refactor: split filter database materialization helpers`
+- `84230a2 refactor: centralize default settings constants`
+- `7b95eb1 docs: update refactoring handoff documentation`
+
 ## Final Validation
 
 Final validation results are recorded in `docs/validation_report.md`.

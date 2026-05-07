@@ -32,6 +32,9 @@ validated final DB and tracked lineage/accounting fixtures.
   The longest areas are schema optimization, canonical upsert, manifest
   building, full-cover readiness, barrier load-cell classification, endpoint
   completeness, read-model building, API route setup, and catalog building.
+  Measurement method: AST scan over `src/nhtsa_metadata/**/*.py`, counting
+  `FunctionDef`, `AsyncFunctionDef`, and `ClassDef` nodes where
+  `end_lineno - lineno + 1 >= 50`.
 - Impact: small behavior changes are harder to review and regression risk is
   higher.
 - Recommended action: split only active or frequently changed functions first;

@@ -44,7 +44,7 @@ Copy `.env.example` to `.env` only when local overrides are needed. Keep
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -q
-.venv\Scripts\python.exe -m ruff check src tests
+.venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m mypy src\nhtsa_metadata
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 powershell -ExecutionPolicy Bypass -File .harness\run.ps1
