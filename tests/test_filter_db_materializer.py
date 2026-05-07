@@ -96,9 +96,26 @@ def test_materialize_filter_database_copies_and_populates_filter_read_model(
     payload = materialize_filter_database(source_db=source_path, output_db=output_path)
 
     assert payload["vehicle_report"]["changed_rows"] == 1
+    assert payload["vehicle_report"]["field_non_null_counts"] == {
+        "body_type": 1,
+        "curb_weight": 1,
+        "vehicle_length": 1,
+        "vehicle_width": 1,
+        "wheelbase": 1,
+        "vax_crush_distance": 1,
+    }
+    assert payload["read_model_report"]["test_rows"] == 1
+    assert payload["read_model_report"]["test_filter_summary_rows"] == 1
+    assert payload["read_model_report"]["has_load_cell_barrier_count"] == 1
+    assert payload["read_model_report"]["load_cell_classified_test_count"] == 1
     assert payload["read_model_report"]["load_cell_classification_counts"] == {
         "legacy_4x9_us_ncap": 1
     }
+    assert payload["read_model_report"]["load_cell_family_counts"] == {
+        "frontal_or_flat_load_cell_wall": 1
+    }
+    assert payload["read_model_report"]["channel_map_rows_before_discard"] == 36
+    assert payload["read_model_report"]["channel_map_rows_materialized"] == 0
     assert payload["read_model_report"]["channel_map_discarded_for_filter_db"] is True
 
     output_settings = tmp_settings.model_copy(
