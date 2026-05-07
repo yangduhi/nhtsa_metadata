@@ -5,6 +5,18 @@ from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
+from nhtsa_metadata.constants import (
+    APP_NAME,
+    DEFAULT_ALLOW_LIVE,
+    DEFAULT_DATABASE_URL,
+    DEFAULT_ENVIRONMENT,
+    DEFAULT_MIN_TEST_DATE,
+    DEFAULT_NHTSA_BASE_URL,
+    DEFAULT_RATE_LIMIT_DELAY_SECONDS,
+    DEFAULT_RETRY_COUNT,
+    DEFAULT_TIMEOUT_SECONDS,
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -13,15 +25,15 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "nhtsa_metadata"
-    environment: str = "local"
-    database_url: str = "sqlite:///data/nhtsa_metadata.sqlite"
-    nhtsa_base_url: str = "https://nrd.api.nhtsa.dot.gov/nhtsa/vehicle/api/v1"
-    allow_live: bool = False
-    default_timeout_seconds: float = 30.0
-    default_retry_count: int = 2
-    rate_limit_delay_seconds: float = 0.0
-    min_test_date: date = date(2011, 1, 1)
+    app_name: str = APP_NAME
+    environment: str = DEFAULT_ENVIRONMENT
+    database_url: str = DEFAULT_DATABASE_URL
+    nhtsa_base_url: str = DEFAULT_NHTSA_BASE_URL
+    allow_live: bool = DEFAULT_ALLOW_LIVE
+    default_timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    default_retry_count: int = DEFAULT_RETRY_COUNT
+    rate_limit_delay_seconds: float = DEFAULT_RATE_LIMIT_DELAY_SECONDS
+    min_test_date: date = DEFAULT_MIN_TEST_DATE
     reference_database_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
