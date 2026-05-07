@@ -6,6 +6,9 @@
 metadata. It preserves raw NHTSA source responses, normalizes important engineering filter domains,
 and exposes query/filter APIs.
 
+The project is closed for first delivery as a metadata DB project. Downstream
+GUI design and productization are handled outside this repository.
+
 ## Scope
 
 - Python package: `nhtsa_metadata`
@@ -61,14 +64,37 @@ bounded manifest seed. It is not the source of truth for canonical metadata.
 ## Project Layout
 
 ```text
-src/nhtsa_metadata/       Python package
-tests/                    Unit and smoke tests
-scripts/                  Local test and verification scripts
-.harness/                 Codex harness entrypoint
-.codex/                   Repo-local Codex operating rules
-.skills/                  Repo-local reusable agent skills
-.agent/                   Project metadata for agent workflows
-.agents/skills/           Compatibility skill wrappers
-docs/phase_reports/       Per-phase implementation reports
-nhtsa_metadata_codex_work_orders/  Implementation work orders
+src/nhtsa_metadata/              Python package
+src/nhtsa_metadata/sources/      NHTSA endpoint definitions, clients, parsers
+src/nhtsa_metadata/services/     Catalog, ingestion, schema, classification, read-model services
+src/nhtsa_metadata/db/           SQLAlchemy models, sessions, Alembic helpers
+src/nhtsa_metadata/api/          FastAPI read/query surface
+tests/                           Unit, integration, and regression tests
+scripts/                         Local verification scripts
+.harness/                        Codex harness entrypoint
+docs/                            Architecture, contracts, reports, and handoff docs
+docs/phase_reports/              Per-phase implementation reports
+nhtsa_metadata_codex_work_orders/ Implementation work orders
 ```
+
+## Architecture and Handoff Docs
+
+- `docs/architecture.md`: package/layer overview
+- `docs/data_flow.md`: extract, transform, validate, load flow
+- `docs/schema.md`: handoff schema summary
+- `docs/baseline_report.md`: pre-refactoring output baseline
+- `docs/refactoring_audit.md`: post-delivery refactoring findings
+- `docs/refactoring_plan.md`: bounded refactoring plan
+- `docs/refactoring_report.md`: refactoring closeout
+- `docs/validation_report.md`: validation and regression evidence
+
+## Final Output DB
+
+Final filter-ready runtime artifact:
+
+```text
+data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite
+```
+
+This file is intentionally ignored under `data/`. The committed code, fixtures,
+migrations, and reports define how to regenerate and validate it.
