@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import Select, String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from nhtsa_metadata.db.models import CrashTest, DownloadJob, MediaAsset
@@ -28,15 +28,67 @@ def list_downloadable_assets(
     *,
     test_no: int | None = None,
     asset_kind: str | None = None,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[dict[str, object]]:
     """List DB-registered assets that the GUI may offer for controlled download."""
+    items, _total = list_downloadable_asset_page(
+        session,
+        test_no=test_no,
+        asset_kind=asset_kind,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    return items
+
+
+def list_downloadable_asset_page(
+    session: Session,
+    *,
+    test_no: int | None = None,
+    asset_kind: str | None = None,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> tuple[list[dict[str, object]], int]:
+    """Return a bounded page plus the filtered total for the GUI asset browser."""
+    statement = _downloadable_asset_statement(test_no=test_no, asset_kind=asset_kind, q=q)
+    total = session.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    statement = statement.order_by(CrashTest.test_no, MediaAsset.id)
+    if offset > 0:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    rows = session.execute(statement).all()
+    return [_asset_summary(asset, test) for asset, test in rows], total
+
+
+def _downloadable_asset_statement(
+    *,
+    test_no: int | None,
+    asset_kind: str | None,
+    q: str | None,
+) -> Select[tuple[MediaAsset, CrashTest]]:
     statement = select(MediaAsset, CrashTest).join(CrashTest, MediaAsset.test_id == CrashTest.id)
     if test_no is not None:
         statement = statement.where(CrashTest.test_no == test_no)
     if asset_kind is not None:
         statement = statement.where(MediaAsset.asset_kind == asset_kind)
-    rows = session.execute(statement.order_by(CrashTest.test_no, MediaAsset.id)).all()
-    return [_asset_summary(asset, test) for asset, test in rows]
+    query = q.strip() if q is not None else ""
+    if query:
+        pattern = f"%{query}%"
+        statement = statement.where(
+            or_(
+                MediaAsset.suggested_filename.ilike(pattern),
+                MediaAsset.source_url.ilike(pattern),
+                MediaAsset.asset_kind.ilike(pattern),
+                MediaAsset.asset_subtype.ilike(pattern),
+                cast(CrashTest.test_no, String).like(pattern),
+            )
+        )
+    return statement
 
 
 def enqueue_download(

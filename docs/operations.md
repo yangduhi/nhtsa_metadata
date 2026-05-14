@@ -40,6 +40,12 @@ Keeper 선정 근거와 archive 위치는 `docs/db_baseline.md`에 기록한다.
 
 GUI 다운로드는 DB `media_assets`에 저장된 URL/metadata에서 선택한 asset만 대상으로 한다. 기본 검증에서는 mocked download만 허용하며 실제 파일 다운로드는 사용자가 GUI/API/CLI에서 명시적으로 실행한 job에 한정한다.
 
+FastAPI는 로컬 asset console을 `/`에서 제공한다. 정적 파일은 `src/nhtsa_metadata/api/static/`에 있으며, 브라우저 UI는 `/api/download-assets`, `/api/download-jobs`, `/api/download-jobs/{job_id}/run`을 호출한다.
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn nhtsa_metadata.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```
+
 ```powershell
 .venv\Scripts\python.exe -m nhtsa_metadata.cli download list-assets
 .venv\Scripts\python.exe -m nhtsa_metadata.cli download enqueue --media-asset-id 1

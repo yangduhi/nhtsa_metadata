@@ -428,9 +428,9 @@ Final verification after implementation:
 ```text
 ruff check src tests alembic            PASS
 mypy src/nhtsa_metadata                 PASS, 57 source files
-pytest -q                               PASS, 150 passed, 4 warnings
-scripts/verify.ps1                      PASS, 150 passed, 4 warnings
-.harness/run.ps1                        PASS, 150 passed, 4 warnings
+pytest -q                               PASS, 152 passed, 4 warnings
+scripts/verify.ps1                      PASS, 152 passed, 4 warnings
+.harness/run.ps1                        PASS, 152 passed, 4 warnings
 ```
 
 Warnings remain the known non-blocking pytest collection warnings around SQLAlchemy model class
@@ -498,9 +498,57 @@ New test coverage:
 
 TDD red check was observed before implementation: `ops`/`legacy` groups and `catalog materialize-filter-db` were missing, then passed after the CLI split.
 
+### GUI frontend connection
+
+Added local FastAPI-served asset console:
+
+```text
+GET /                  -> static GUI shell
+GET /static/gui.css    -> console styling
+GET /static/gui.js     -> browser behavior/API wiring
+```
+
+Added files:
+
+- `src/nhtsa_metadata/api/static/index.html`
+- `src/nhtsa_metadata/api/static/gui.css`
+- `src/nhtsa_metadata/api/static/gui.js`
+- `tests/test_gui_frontend.py`
+
+Frontend behavior:
+
+- Loads `/api/health` to show API/environment status.
+- Loads `/api/download-assets` with `limit`, `offset`, `test_no`, `asset_kind`, and `q` filters.
+- Shows filtered totals and page counts for the large keeper DB asset registry.
+- Queues selected assets through `POST /api/download-jobs`.
+- Lists jobs through `GET /api/download-jobs` with status filter chips.
+- Requires a browser confirmation before calling `POST /api/download-jobs/{job_id}/run`, because that endpoint may perform a real HTTP(S) download.
+
+Design basis:
+
+- Linear-inspired dark native surface, compressed heading scale, subtle translucent borders.
+- Supabase-inspired emerald accent and developer-console posture.
+- Vercel-inspired precise table/card spacing and restrained interaction states.
+
+MCP note:
+
+- The native MCP skill was loaded and the Hermes config was checked for `mcp_servers`; none are configured/exposed in this session, so implementation used the available repo, browser, and test tools plus the loaded design skills.
+
+Targeted verification:
+
+```text
+pytest tests/test_gui_frontend.py -q                                      PASS, 2 passed
+ruff/mypy targeted GUI/backend checks                                    PASS
+pytest tests/test_api_downloads.py tests/test_downloads.py tests/test_gui_frontend.py -q  PASS, 8 passed
+browser visual check at http://127.0.0.1:8020/                           PASS
+browser console after load/filter                                        PASS, no JS errors
+```
+
+Browser smoke confirmed the real keeper DB page loads `50 / 290845` assets, search filtering reduced `v07201R002` to `1 / 1`, and the visual layout had no commit-blocking overlap/clipping issues.
+
 ## Remaining Next Steps
 
-1. Connect the actual GUI frontend to the new `/api/download-*` endpoints.
+1. If a downstream GUI exists, either embed this local console route or port its API wiring to that frontend.
 2. If a newer DB becomes the official baseline later, repeat the `docs/db_baseline.md` keeper/archive process.
 3. Consider a later internal code-module move for legacy/research services only after the CLI split remains stable and green.
 

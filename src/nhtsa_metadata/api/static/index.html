@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>NHTSA Crash Test Asset Console</title>
+    <link rel="stylesheet" href="/static/gui.css" />
+  </head>
+  <body>
+    <div id="assetConsoleApp" class="app-shell">
+      <aside class="rail" aria-label="Primary">
+        <div class="brand-mark" aria-hidden="true">N</div>
+        <nav class="rail-nav" aria-label="Sections">
+          <a href="#assets" class="rail-link active">Assets</a>
+          <a href="#jobs" class="rail-link">Jobs</a>
+          <a href="#status" class="rail-link">Status</a>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="hero-panel">
+          <div class="hero-copy">
+            <p class="eyebrow">GUI-facing local backend</p>
+            <h1>NHTSA Crash Test Asset Console</h1>
+            <p class="hero-text">
+              DB에 등록된 crash test media asset을 검색하고, 선택한 항목만 안전하게 queue에 넣는 로컬 다운로드 콘솔입니다.
+            </p>
+          </div>
+          <div class="hero-actions" aria-label="Primary actions">
+            <button class="button ghost" type="button" data-action="refreshAll">Refresh</button>
+            <button class="button primary" type="button" data-action="focusSearch">Search assets</button>
+          </div>
+          <section class="status-grid" id="status" aria-label="System status">
+            <article class="status-card">
+              <span class="status-label">API</span>
+              <strong id="apiStatus">checking</strong>
+            </article>
+            <article class="status-card">
+              <span class="status-label">Environment</span>
+              <strong id="environmentStatus">—</strong>
+            </article>
+            <article class="status-card">
+              <span class="status-label">Selected page</span>
+              <strong id="assetCountStatus">0 assets</strong>
+            </article>
+            <article class="status-card">
+              <span class="status-label">Jobs</span>
+              <strong id="jobCountStatus">0 queued</strong>
+            </article>
+          </section>
+        </header>
+
+        <section class="panel" id="assets" aria-labelledby="assetBrowserTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Controlled download picker</p>
+              <h2 id="assetBrowserTitle">Asset browser</h2>
+            </div>
+            <p class="panel-note">기본 50개씩 조회합니다. 실제 다운로드는 job run을 눌렀을 때만 시작됩니다.</p>
+          </div>
+
+          <form class="filter-bar" id="assetFilterForm">
+            <label>
+              <span>Test no</span>
+              <input id="testNoInput" inputmode="numeric" name="test_no" placeholder="예: 10001" />
+            </label>
+            <label>
+              <span>Asset kind</span>
+              <select id="assetKindInput" name="asset_kind">
+                <option value="">All kinds</option>
+                <option value="photo">Photo</option>
+                <option value="video">Video</option>
+                <option value="data_package">Data package</option>
+                <option value="report">Report</option>
+                <option value="document">Document</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="search-field">
+              <span>Search</span>
+              <input id="assetSearchInput" name="q" placeholder="filename, url, kind" autocomplete="off" />
+            </label>
+            <button class="button primary" type="submit">Apply filters</button>
+          </form>
+
+          <div class="table-shell" role="region" aria-live="polite" aria-label="Downloadable assets">
+            <table>
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Kind</th>
+                  <th>Filename</th>
+                  <th>Source</th>
+                  <th class="right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="assetRows">
+                <tr><td colspan="5" class="empty-cell">Loading assets…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pager">
+            <button class="button ghost" type="button" data-action="previousPage">Previous</button>
+            <span id="pageStatus">Page 1</span>
+            <button class="button ghost" type="button" data-action="nextPage">Next</button>
+          </div>
+        </section>
+
+        <section class="panel jobs-panel" id="jobs" aria-labelledby="jobsTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Download queue</p>
+              <h2 id="jobsTitle">Jobs</h2>
+            </div>
+            <div class="segmented" role="group" aria-label="Job status filter">
+              <button class="segment active" type="button" data-status="">All</button>
+              <button class="segment" type="button" data-status="queued">Queued</button>
+              <button class="segment" type="button" data-status="completed">Done</button>
+              <button class="segment" type="button" data-status="failed">Failed</button>
+            </div>
+          </div>
+          <div class="job-list" id="jobRows" aria-live="polite">
+            <div class="empty-card">No jobs loaded yet.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/gui.js" defer></script>
+  </body>
+</html>

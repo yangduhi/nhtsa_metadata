@@ -27,7 +27,7 @@ from nhtsa_metadata.services.discovery_authority import (
 from nhtsa_metadata.services.downloads import (
     enqueue_download,
     list_download_jobs,
-    list_downloadable_assets,
+    list_downloadable_asset_page,
     run_download_job,
 )
 from nhtsa_metadata.services.endpoint_completeness import (
@@ -155,12 +155,24 @@ def download_list_assets(
     database_url: Annotated[str | None, typer.Option("--database-url")] = None,
     test_no: Annotated[int | None, typer.Option("--test-no")] = None,
     asset_kind: Annotated[str | None, typer.Option("--asset-kind")] = None,
+    q: Annotated[str | None, typer.Option("--q")] = None,
+    limit: Annotated[int, typer.Option("--limit", min=1, max=200)] = 50,
+    offset: Annotated[int, typer.Option("--offset", min=0)] = 0,
 ) -> None:
     """List DB-registered assets available for GUI-controlled download."""
     session_factory = _session_factory(database_url)
     with session_factory() as session:
-        items = list_downloadable_assets(session, test_no=test_no, asset_kind=asset_kind)
-    _print_json({"items": items, "count": len(items)})
+        items, total = list_downloadable_asset_page(
+            session,
+            test_no=test_no,
+            asset_kind=asset_kind,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+    _print_json(
+        {"items": items, "count": len(items), "total": total, "limit": limit, "offset": offset}
+    )
 
 
 @download_app.command("enqueue")

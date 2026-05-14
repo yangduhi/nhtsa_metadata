@@ -1,6 +1,9 @@
 from decimal import Decimal
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -25,7 +28,7 @@ from nhtsa_metadata.services.coverage_service import CoverageService
 from nhtsa_metadata.services.downloads import (
     enqueue_download,
     list_download_jobs,
-    list_downloadable_assets,
+    list_downloadable_asset_page,
     run_download_job,
 )
 from nhtsa_metadata.services.scope import is_in_scope_test_record
@@ -43,6 +46,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     session_factory = create_session_factory(effective_settings)
     app = FastAPI(title=effective_settings.app_name, version=__version__)
     app.state.settings = effective_settings
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def gui_shell() -> FileResponse:
+        return FileResponse(static_dir / "index.html")
 
     @app.get("/api/health")
     def health() -> dict[str, object]:
@@ -201,10 +210,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def download_assets(
         test_no: int | None = None,
         asset_kind: str | None = None,
+        q: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
     ) -> dict[str, object]:
         with session_factory() as session:
-            items = list_downloadable_assets(session, test_no=test_no, asset_kind=asset_kind)
-        return {"items": items, "count": len(items)}
+            items, total = list_downloadable_asset_page(
+                session,
+                test_no=test_no,
+                asset_kind=asset_kind,
+                q=q,
+                limit=limit,
+                offset=offset,
+            )
+        return {
+            "items": items,
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     @app.post("/api/download-jobs")
     def create_download_job(payload: DownloadJobCreate) -> dict[str, object]:

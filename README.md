@@ -26,7 +26,7 @@ that product surface.
 
 ## Not in Scope
 
-- Full GUI product implementation outside the API/backend surface
+- Full downstream GUI product implementation beyond the local asset console served by this API
 - Unbounded or crawler-style download execution
 - Waveform parsing
 - TDMS/UDS/ABF/ISO parsing
@@ -67,6 +67,16 @@ bounded manifest seed. It is not the source of truth for canonical metadata.
 
 ## DB Management and GUI Downloads
 
+The FastAPI app serves a local asset console at `/` and static assets under `/static/*`.
+Run it against the configured SQLite baseline with:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn nhtsa_metadata.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/` to search DB-registered assets, queue selected downloads,
+and review download jobs. The console uses the same API endpoints listed below.
+
 The product CLI/API surface is centered on these local operations:
 
 ```powershell
@@ -88,7 +98,7 @@ src/nhtsa_metadata/              Python package
 src/nhtsa_metadata/sources/      NHTSA endpoint definitions, clients, parsers
 src/nhtsa_metadata/services/     Catalog, ingestion, schema, classification, read-model services
 src/nhtsa_metadata/db/           SQLAlchemy models, sessions, Alembic helpers
-src/nhtsa_metadata/api/          FastAPI read/query surface
+src/nhtsa_metadata/api/          FastAPI read/query surface and local asset-console static UI
 tests/                           Unit, integration, and regression tests
 scripts/                         Local verification scripts
 .harness/                        Codex harness entrypoint
