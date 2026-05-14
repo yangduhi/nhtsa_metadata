@@ -2,28 +2,32 @@
 
 ## Purpose
 
-`nhtsa_metadata` is a metadata-only catalog database for 2011+ NHTSA Vehicle Crash Test Database
+`nhtsa_metadata` is the local DB and GUI-facing backend for 2011+ NHTSA Vehicle Crash Test Database
 metadata. It preserves raw NHTSA source responses, normalizes important engineering filter domains,
-and exposes query/filter APIs.
+exposes query/filter APIs, and provides controlled DB management and asset-download workflows for a
+GUI.
 
-The project is closed for first delivery as a metadata DB project. Downstream
-GUI design and productization are handled outside this repository.
+The current product scope is intentionally narrow: build the metadata DB, manage local DB files, and
+allow a GUI to download selected DB-registered assets. Historical schema research, pilot reports, and
+classification experiments are retained only as operations/validation references unless promoted into
+that product surface.
 
 ## Scope
 
 - Python package: `nhtsa_metadata`
-- FastAPI application skeleton
+- FastAPI GUI-facing query, DB-status, and download-control API
 - SQLite/SQLAlchemy/Alembic foundation
 - Fixture/mock based verification
 - Raw/provenance, canonical, and read-model layers
 - Canonical/read-model scope fixed to `test_date >= 2011-01-01`
 - Bounded manual live validation through manifest-driven commands only
+- DB management commands for local SQLite status, backup, and maintenance
+- Controlled asset-download queue based only on `media_assets` records already stored in the DB
 
 ## Not in Scope
 
-- UI
-- Download execution
-- Queue/progress APIs
+- Full GUI product implementation outside the API/backend surface
+- Unbounded or crawler-style download execution
 - Waveform parsing
 - TDMS/UDS/ABF/ISO parsing
 - Production crawler
@@ -61,6 +65,22 @@ harness scripts. Bounded live validation requires `--source live`, `--allow-live
 The local reference DB at `D:\vscode\pulse_analysis\data\db\nhtsa_data.db` may be used only as a
 bounded manifest seed. It is not the source of truth for canonical metadata.
 
+## DB Management and GUI Downloads
+
+The product CLI/API surface is centered on these local operations:
+
+```powershell
+.venv\Scripts\python.exe -m nhtsa_metadata.cli db status
+.venv\Scripts\python.exe -m nhtsa_metadata.cli db backup --output data\backup.sqlite
+.venv\Scripts\python.exe -m nhtsa_metadata.cli db vacuum
+.venv\Scripts\python.exe -m nhtsa_metadata.cli download list-assets
+.venv\Scripts\python.exe -m nhtsa_metadata.cli download enqueue --media-asset-id 1
+```
+
+Download jobs must be created from DB `media_assets` rows. Downloaded files are runtime artifacts and
+belong in the configured download directory, not in tracked source files. Default verification uses
+fixtures/mocks and must not perform live API calls or real downloads.
+
 ## Project Layout
 
 ```text
@@ -83,6 +103,7 @@ nhtsa_metadata_codex_work_orders/ Implementation work orders
 - `docs/data_flow.md`: extract, transform, validate, load flow
 - `docs/schema.md`: handoff schema summary
 - `docs/baseline_report.md`: pre-refactoring output baseline
+- `docs/db_baseline.md`: current local keeper DB and data archive policy
 - `docs/refactoring_audit.md`: post-delivery refactoring findings
 - `docs/refactoring_plan.md`: bounded refactoring plan
 - `docs/refactoring_report.md`: refactoring closeout
@@ -97,4 +118,17 @@ data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite
 ```
 
 This file is intentionally ignored under `data/`. The committed code, fixtures,
-migrations, and reports define how to regenerate and validate it.
+migrations, and reports define how to regenerate and validate it. See
+`docs/db_baseline.md` for keeper selection and archived non-keeper artifacts.
+
+## CLI Surface
+
+Product commands are intentionally small:
+
+```powershell
+.venv\Scripts\python.exe -m nhtsa_metadata.cli db status
+.venv\Scripts\python.exe -m nhtsa_metadata.cli download list-assets
+.venv\Scripts\python.exe -m nhtsa_metadata.cli catalog materialize-filter-db --help
+```
+
+Operational/reporting commands are available under `ops`, and historical schema/research commands are under `legacy`. Backward-compatible top-level aliases for `coverage`, `scale`, and `schema` still execute but are hidden from top-level help.

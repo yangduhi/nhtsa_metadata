@@ -602,6 +602,25 @@ class MediaAsset(LineageMixin, TimestampMixin, Base):
     description: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
 
 
+class DownloadJob(TimestampMixin, Base):
+    __tablename__ = "download_jobs"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    media_asset_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("media_assets.id"), nullable=False, index=True
+    )
+    test_no: Mapped[int | None] = sa_mapped_column(Integer, nullable=True, index=True)
+    status: Mapped[str] = sa_mapped_column(String(32), default="queued", nullable=False)
+    source_url: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    destination_path: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    filename: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    size_bytes: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    error_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
 class CodeValue(TimestampMixin, Base):
     __tablename__ = "code_values"
     __table_args__ = (UniqueConstraint("code_set", "code_value"),)

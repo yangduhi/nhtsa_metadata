@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from nhtsa_metadata import __version__
@@ -21,7 +22,18 @@ from nhtsa_metadata.db.session import (
     ensure_schema,
 )
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.downloads import (
+    enqueue_download,
+    list_download_jobs,
+    list_downloadable_assets,
+    run_download_job,
+)
 from nhtsa_metadata.services.scope import is_in_scope_test_record
+
+
+class DownloadJobCreate(BaseModel):
+    media_asset_id: int
+    download_dir: str | None = None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -184,6 +196,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with session_factory() as session:
             rows = CoverageService(session).report_rows()
         return {"items": [row.__dict__ for row in rows], "count": len(rows)}
+
+    @app.get("/api/download-assets")
+    def download_assets(
+        test_no: int | None = None,
+        asset_kind: str | None = None,
+    ) -> dict[str, object]:
+        with session_factory() as session:
+            items = list_downloadable_assets(session, test_no=test_no, asset_kind=asset_kind)
+        return {"items": items, "count": len(items)}
+
+    @app.post("/api/download-jobs")
+    def create_download_job(payload: DownloadJobCreate) -> dict[str, object]:
+        with session_factory() as session:
+            try:
+                job = enqueue_download(
+                    session,
+                    payload.media_asset_id,
+                    payload.download_dir or effective_settings.download_dir,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            session.commit()
+            return job
+
+    @app.get("/api/download-jobs")
+    def download_jobs(status: str | None = None) -> dict[str, object]:
+        with session_factory() as session:
+            items = list_download_jobs(session, status=status)
+        return {"items": items, "count": len(items)}
+
+    @app.post("/api/download-jobs/{job_id}/run")
+    def run_download_job_endpoint(job_id: int) -> dict[str, object]:
+        with session_factory() as session:
+            try:
+                job = run_download_job(
+                    session,
+                    job_id,
+                    fetcher=getattr(app.state, "download_fetcher", None),
+                    timeout_seconds=effective_settings.default_timeout_seconds,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            session.commit()
+            return job
 
     @app.get("/api/collection-runs")
     def collection_runs() -> dict[str, object]:

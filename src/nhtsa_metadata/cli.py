@@ -19,9 +19,16 @@ from nhtsa_metadata.db.session import (
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.services.code_values import CodeValueRebuildService
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.db_management import backup_database, inspect_database, vacuum_database
 from nhtsa_metadata.services.discovery_authority import (
     run_discovery_diagnostics,
     validate_reference_discovery,
+)
+from nhtsa_metadata.services.downloads import (
+    enqueue_download,
+    list_download_jobs,
+    list_downloadable_assets,
+    run_download_job,
 )
 from nhtsa_metadata.services.endpoint_completeness import (
     EndpointBackfillService,
@@ -60,13 +67,32 @@ from nhtsa_metadata.sources.nhtsa_crash.live_client import (
 app = typer.Typer(add_completion=False, no_args_is_help=False)
 catalog_app = typer.Typer(add_completion=False)
 coverage_app = typer.Typer(add_completion=False)
+db_app = typer.Typer(add_completion=False)
+download_app = typer.Typer(add_completion=False)
+legacy_app = typer.Typer(add_completion=False)
+ops_app = typer.Typer(add_completion=False)
 scale_app = typer.Typer(add_completion=False)
 schema_app = typer.Typer(add_completion=False)
-app.add_typer(catalog_app, name="catalog")
-app.add_typer(coverage_app, name="coverage")
-app.add_typer(scale_app, name="scale")
-app.add_typer(schema_app, name="schema")
+
+app.add_typer(catalog_app, name="catalog", help="Build and rebuild the local metadata DB.")
+app.add_typer(db_app, name="db", help="Inspect, back up, and maintain local DB files.")
+app.add_typer(download_app, name="download", help="Queue and run GUI-controlled asset downloads.")
+app.add_typer(ops_app, name="ops", help="Operational validation and reporting commands.")
+app.add_typer(legacy_app, name="legacy", help="Research and historical commands.")
+
+# Backward-compatible aliases remain executable but are hidden from top-level help so the
+# product surface stays focused on GUI downloads, DB build, and DB management.
+app.add_typer(coverage_app, name="coverage", hidden=True)
+app.add_typer(scale_app, name="scale", hidden=True)
+app.add_typer(schema_app, name="schema", hidden=True)
+ops_app.add_typer(coverage_app, name="coverage")
+ops_app.add_typer(scale_app, name="scale")
+legacy_app.add_typer(schema_app, name="schema")
 console = Console()
+
+
+def _print_json(payload: object) -> None:
+    print(json.dumps(payload, sort_keys=True))
 
 
 @app.callback(invoke_without_command=True)
@@ -95,6 +121,91 @@ def health() -> None:
         "min_test_date": settings.min_test_date.isoformat(),
     }
     console.print(json.dumps(payload, sort_keys=True))
+
+
+@db_app.command("status")
+def db_status(database_url: Annotated[str | None, typer.Option("--database-url")] = None) -> None:
+    """Inspect the local SQLite DB for GUI/ops status screens."""
+    settings = _effective_settings(database_url)
+    _print_json(inspect_database(settings.database_url))
+
+
+@db_app.command("backup")
+def db_backup(
+    output: Annotated[Path, typer.Option("--output")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+) -> None:
+    """Create a local SQLite backup file."""
+    settings = _effective_settings(database_url)
+    _print_json(backup_database(settings.database_url, output))
+
+
+@db_app.command("vacuum")
+def db_vacuum(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    analyze: Annotated[bool, typer.Option("--analyze/--no-analyze")] = True,
+) -> None:
+    """Run SQLite VACUUM/ANALYZE maintenance."""
+    settings = _effective_settings(database_url)
+    _print_json(vacuum_database(settings.database_url, analyze=analyze))
+
+
+@download_app.command("list-assets")
+def download_list_assets(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    test_no: Annotated[int | None, typer.Option("--test-no")] = None,
+    asset_kind: Annotated[str | None, typer.Option("--asset-kind")] = None,
+) -> None:
+    """List DB-registered assets available for GUI-controlled download."""
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        items = list_downloadable_assets(session, test_no=test_no, asset_kind=asset_kind)
+    _print_json({"items": items, "count": len(items)})
+
+
+@download_app.command("enqueue")
+def download_enqueue(
+    media_asset_id: Annotated[int, typer.Option("--media-asset-id")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    download_dir: Annotated[Path | None, typer.Option("--download-dir")] = None,
+) -> None:
+    """Queue a selected DB-registered media asset for download."""
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
+    with session_factory() as session:
+        job = enqueue_download(session, media_asset_id, download_dir or settings.download_dir)
+        session.commit()
+    _print_json(job)
+
+
+@download_app.command("list-jobs")
+def download_list_jobs(
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+    status: Annotated[str | None, typer.Option("--status")] = None,
+) -> None:
+    """List queued/completed download jobs."""
+    session_factory = _session_factory(database_url)
+    with session_factory() as session:
+        items = list_download_jobs(session, status=status)
+    _print_json({"items": items, "count": len(items)})
+
+
+@download_app.command("run-job")
+def download_run_job(
+    job_id: Annotated[int, typer.Option("--job-id")],
+    database_url: Annotated[str | None, typer.Option("--database-url")] = None,
+) -> None:
+    """Run a queued DB-registered download job."""
+    settings = _effective_settings(database_url)
+    session_factory = _session_factory_for_settings(settings)
+    with session_factory() as session:
+        job = run_download_job(
+            session,
+            job_id,
+            timeout_seconds=settings.default_timeout_seconds,
+        )
+        session.commit()
+    _print_json(job)
 
 
 @catalog_app.command("discover")
@@ -238,6 +349,17 @@ def catalog_build_manifest(
         or (Path(settings.reference_database_path) if settings.reference_database_path else None),
     )
     console.print(json.dumps(report.__dict__, sort_keys=True))
+
+
+@catalog_app.command("materialize-filter-db")
+def catalog_materialize_filter_db(
+    source_db: Annotated[Path, typer.Option("--source-db")],
+    output_db: Annotated[Path, typer.Option("--output-db")],
+    overwrite: Annotated[bool, typer.Option("--overwrite")] = False,
+) -> None:
+    """Materialize a GUI/filter-ready DB as part of the product DB build surface."""
+    payload = _materialize_filter_db(source_db=source_db, output_db=output_db, overwrite=overwrite)
+    console.print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2))
 
 
 @catalog_app.command("discovery-diagnostics")
@@ -560,18 +682,22 @@ def schema_rebuild_code_values(
     console.print(encoded)
 
 
+def _materialize_filter_db(source_db: Path, output_db: Path, overwrite: bool) -> dict[str, Any]:
+    return materialize_filter_database(
+        source_db=source_db,
+        output_db=output_db,
+        overwrite=overwrite,
+        discard_load_cell_channel_map=True,
+    )
+
+
 @schema_app.command("materialize-filter-db")
 def schema_materialize_filter_db(
     source_db: Annotated[Path, typer.Option("--source-db")],
     output_db: Annotated[Path, typer.Option("--output-db")],
     overwrite: Annotated[bool, typer.Option("--overwrite")] = False,
 ) -> None:
-    payload = materialize_filter_database(
-        source_db=source_db,
-        output_db=output_db,
-        overwrite=overwrite,
-        discard_load_cell_channel_map=True,
-    )
+    payload = _materialize_filter_db(source_db=source_db, output_db=output_db, overwrite=overwrite)
     console.print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, indent=2))
 
 

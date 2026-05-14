@@ -9,6 +9,7 @@ from nhtsa_metadata.constants import (
     APP_NAME,
     DEFAULT_ALLOW_LIVE,
     DEFAULT_DATABASE_URL,
+    DEFAULT_DOWNLOAD_DIR,
     DEFAULT_ENVIRONMENT,
     DEFAULT_MIN_TEST_DATE,
     DEFAULT_NHTSA_BASE_URL,
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     default_retry_count: int = DEFAULT_RETRY_COUNT
     rate_limit_delay_seconds: float = DEFAULT_RATE_LIMIT_DELAY_SECONDS
     min_test_date: date = DEFAULT_MIN_TEST_DATE
+    download_dir: str = DEFAULT_DOWNLOAD_DIR
     reference_database_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
