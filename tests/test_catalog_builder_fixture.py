@@ -21,6 +21,7 @@ from nhtsa_metadata.db.session import (
 )
 from nhtsa_metadata.services.catalog_builder import CatalogBuilder
 from nhtsa_metadata.sources.nhtsa_crash.fixtures import FixtureNhtsaClient
+from nhtsa_metadata.sources.nhtsa_crash.live_client import LiveNhtsaClient
 
 
 def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]
@@ -73,6 +74,32 @@ def test_collect_test_10001_and_10003_builds_canonical_rows(tmp_settings) -> Non
             )
         }
         assert summaries[10001].has_uds_or_tdms_package is True
+        assert summaries[10001].vehicle_test_weight_min == 2912
+        assert summaries[10001].curb_weight_min == 2642
+        assert summaries[10001].vehicle_length_min == 5180
+        assert summaries[10001].vehicle_width_min == 2022
+        assert summaries[10001].wheelbase_min == 2955
+        assert summaries[10001].vax_crush_distance_min == 705
+        assert summaries[10001].has_load_cell_barrier is True
+        assert summaries[10003].vehicle_test_weight_min == 1368
+        assert summaries[10003].vehicle_test_weight_max == 1775
+        assert summaries[10003].vehicle_length_min == 4120
+        assert summaries[10003].vehicle_length_max == 4586
+        assert summaries[10003].vehicle_width_min == 1250
+        assert summaries[10003].vehicle_width_max == 1788
+        assert summaries[10003].has_load_cell_barrier is False
+        vehicle_10001 = session.scalar(
+            select(Vehicle)
+            .join(CrashTest, CrashTest.id == Vehicle.test_id)
+            .where(CrashTest.test_no == 10001)
+        )
+        assert vehicle_10001 is not None
+        assert vehicle_10001.body_type == "UTILITY VEHICLE"
+        assert vehicle_10001.curb_weight == 2642
+        assert vehicle_10001.vehicle_length == 5180
+        assert vehicle_10001.vehicle_width == 2022
+        assert vehicle_10001.wheelbase == 2955
+        assert vehicle_10001.vax_crush_distance == 705
         classifications = {
             row.test_no: row
             for row in session.scalars(
@@ -100,6 +127,28 @@ def test_collection_run_records_requested_live_provenance_without_http(tmp_setti
         assert run.allow_live is True
         assert run.finished_at is not None
         assert run.database_url_sanitized == settings.database_url
+
+
+def test_live_catalog_builder_passes_request_policy_to_client(tmp_settings) -> None:  # type: ignore[no-untyped-def]
+    settings = tmp_settings.model_copy(update={"allow_live": True})
+    ensure_schema(create_engine_for_settings(settings))
+    session_factory = create_session_factory(settings)
+
+    with session_factory() as session:
+        builder = CatalogBuilder(
+            session,
+            source="live",
+            allow_live=True,
+            settings=settings,
+            timeout_seconds=31,
+            retry_count=4,
+            rate_limit_delay_seconds=0.2,
+        )
+
+    assert isinstance(builder.client, LiveNhtsaClient)
+    assert builder.client.timeout_seconds == 31
+    assert builder.client.retry_count == 4
+    assert builder.client.rate_limit_delay_seconds == 0.2
 
 
 def test_out_of_scope_legacy_collect_skips_canonical_rows(tmp_settings) -> None:  # type: ignore[no-untyped-def]

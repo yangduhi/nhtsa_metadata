@@ -31,6 +31,8 @@ def test_schema_contains_required_tables(tmp_settings: Settings) -> None:
         "occupants",
         "restraints",
         "instrumentation_channels",
+        "barrier_load_cell_classification",
+        "barrier_load_cell_channel_map",
         "media_assets",
         "test_filter_summary",
         "test_classification",

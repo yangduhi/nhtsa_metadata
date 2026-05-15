@@ -295,6 +295,9 @@ class EndpointBackfillService:
         settings: Settings | None = None,
         min_test_date: date | None = None,
         client: SourceClientProtocol | None = None,
+        timeout_seconds: float | None = None,
+        retry_count: int | None = None,
+        rate_limit_delay_seconds: float | None = None,
     ) -> None:
         if source == "live" and not allow_live:
             raise LiveAccessNotAllowedError("--source live requires --allow-live")
@@ -307,7 +310,13 @@ class EndpointBackfillService:
         if client is not None:
             self.client = client
         elif source == "live":
-            self.client = LiveNhtsaClient(self.settings, allow_live=allow_live)
+            self.client = LiveNhtsaClient(
+                self.settings,
+                allow_live=allow_live,
+                timeout_seconds=timeout_seconds,
+                retry_count=retry_count,
+                rate_limit_delay_seconds=rate_limit_delay_seconds,
+            )
         elif source == "fixture":
             self.client = FixtureNhtsaClient()
         else:

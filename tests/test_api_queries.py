@@ -28,6 +28,16 @@ def test_list_tests_and_filters(tmp_settings: Settings) -> None:
     body = response.json()
     assert body["count"] == 1
     assert body["items"][0]["test_no"] == 10003
+    response = client.get(
+        "/api/tests",
+        params={"wheelbase_min": 2900, "has_load_cell_barrier": True},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["items"][0]["test_no"] == 10001
+    assert body["items"][0]["vehicle_length_min"] == 5180.0
+    assert body["items"][0]["has_load_cell_barrier"] is True
 
 
 def test_get_test_detail_excludes_raw_by_default(tmp_settings: Settings) -> None:
@@ -38,6 +48,8 @@ def test_get_test_detail_excludes_raw_by_default(tmp_settings: Settings) -> None
     assert "raw_payloads" not in body
     assert body["media_assets"]
     assert body["test_classification"]["test_family"] == "frontal_barrier"
+    assert body["vehicles"][0]["body_type"] == "UTILITY VEHICLE"
+    assert body["vehicles"][0]["wheelbase"] == 2955.0
 
 
 def test_filter_options_are_db_driven(tmp_settings: Settings) -> None:

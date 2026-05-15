@@ -340,10 +340,21 @@ class Vehicle(LineageMixin, TimestampMixin, Base):
     model: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
     model_year: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
     engine_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    body_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
     vehicle_speed_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
     vehicle_speed: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
     vehicle_test_weight_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
     vehicle_test_weight: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    curb_weight_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    curb_weight: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_length_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    vehicle_length: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_width_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    vehicle_width: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    wheelbase_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    wheelbase: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vax_crush_distance_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    vax_crush_distance: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
 
 
 class Barrier(LineageMixin, TimestampMixin, Base):
@@ -465,6 +476,75 @@ class InstrumentationChannelDetail(LineageMixin, TimestampMixin, Base):
     detail_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
 
 
+class BarrierLoadCellClassification(TimestampMixin, Base):
+    __tablename__ = "barrier_load_cell_classification"
+    __table_args__ = (UniqueConstraint("test_no", "config_version", "classification_id"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    barrier_id: Mapped[int | None] = sa_mapped_column(ForeignKey("barriers.id"), nullable=True)
+    config_version: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classification_id: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    family: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    raw_barrier_shape: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_barrier_shape_key: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    shape_alias_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    shape_alias_confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    shape_alias_is_conditional: Mapped[bool] = sa_mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    row_count: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    col_count: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    row_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    col_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    pole_index_range_json: Mapped[list[int] | None] = sa_mapped_column(SAJSON, nullable=True)
+    channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    force_channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    moment_channel_count: Mapped[int] = sa_mapped_column(Integer, default=0, nullable=False)
+    missing_expected_channels_json: Mapped[list[dict[str, Any]] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    duplicate_channels_json: Mapped[list[dict[str, Any]] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    occupancy_map_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+    mask_summary_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class BarrierLoadCellChannelMap(TimestampMixin, Base):
+    __tablename__ = "barrier_load_cell_channel_map"
+    __table_args__ = (
+        UniqueConstraint("classification_id", "instrumentation_channel_id"),
+    )
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    classification_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("barrier_load_cell_classification.id"), nullable=False, index=True
+    )
+    test_id: Mapped[int] = sa_mapped_column(ForeignKey("tests.id"), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    instrumentation_channel_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("instrumentation_channels.id"), nullable=False
+    )
+    curve_no: Mapped[int] = sa_mapped_column(Integer, nullable=False)
+    sensor_attachment_raw: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    instrumentation_commentary: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    parsed_row: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    parsed_col: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    parsed_row_letter: Mapped[str | None] = sa_mapped_column(String(8), nullable=True)
+    parsed_pole_index: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    quantity_type: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    raw_axis: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    canonical_axis: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    unit_raw: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    generated_loma_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    mask_flags_json: Mapped[list[str] | None] = sa_mapped_column(SAJSON, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
 class InjuryMetric(LineageMixin, TimestampMixin, Base):
     __tablename__ = "injury_metrics"
 
@@ -522,6 +602,25 @@ class MediaAsset(LineageMixin, TimestampMixin, Base):
     description: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
 
 
+class DownloadJob(TimestampMixin, Base):
+    __tablename__ = "download_jobs"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    media_asset_id: Mapped[int] = sa_mapped_column(
+        ForeignKey("media_assets.id"), nullable=False, index=True
+    )
+    test_no: Mapped[int | None] = sa_mapped_column(Integer, nullable=True, index=True)
+    status: Mapped[str] = sa_mapped_column(String(32), default="queued", nullable=False)
+    source_url: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    destination_path: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    filename: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    size_bytes: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = sa_mapped_column(DateTime, nullable=True)
+    error_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
 class CodeValue(TimestampMixin, Base):
     __tablename__ = "code_values"
     __table_args__ = (UniqueConstraint("code_set", "code_value"),)
@@ -551,6 +650,37 @@ class TestFilterSummary(TimestampMixin, Base):
     vehicle_models_json: Mapped[list[str] | None] = sa_mapped_column(SAJSON, nullable=True)
     participant_kinds_json: Mapped[list[str] | None] = sa_mapped_column(SAJSON, nullable=True)
     asset_kinds_json: Mapped[list[str] | None] = sa_mapped_column(SAJSON, nullable=True)
+    vehicle_test_weight_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_test_weight_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    curb_weight_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    curb_weight_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_length_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_length_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_width_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vehicle_width_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    wheelbase_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    wheelbase_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vax_crush_distance_min: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    vax_crush_distance_max: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    has_load_cell_barrier: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    load_cell_barrier_classification_ids_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    load_cell_barrier_families_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    load_cell_barrier_config_version: Mapped[str | None] = sa_mapped_column(
+        String(120), nullable=True
+    )
+    load_cell_barrier_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
+    load_cell_barrier_force_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
+    load_cell_barrier_moment_channel_count: Mapped[int | None] = sa_mapped_column(
+        Integer, nullable=True
+    )
     has_uds_or_tdms_package: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -570,6 +700,171 @@ class TestClassification(TimestampMixin, Base):
     counterparty_kind: Mapped[str] = sa_mapped_column(String(64), nullable=False)
     test_family: Mapped[str] = sa_mapped_column(String(120), nullable=False)
     classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(
+        String(64), default="manual_review_required", nullable=False
+    )
+    canonical_label: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    canonical_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    specificity_level: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    classification_run_id: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_summary_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+
+
+class ClassificationAdjudication(TimestampMixin, Base):
+    __tablename__ = "classification_adjudication"
+    __table_args__ = (UniqueConstraint("test_no", "classifier_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int | None] = sa_mapped_column(ForeignKey("tests.id"), nullable=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    classification_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    adjudication_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    final_label: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    recommended_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    adjudication_reason: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    recommended_action: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    source_endpoint_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class TestClassificationCandidate(TimestampMixin, Base):
+    __tablename__ = "test_classification_candidates"
+    __table_args__ = (UniqueConstraint("test_no", "classifier_version", "rank"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_id: Mapped[int | None] = sa_mapped_column(ForeignKey("tests.id"), nullable=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    rank: Mapped[int] = sa_mapped_column(Integer, nullable=False)
+    rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    canonical_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    program_domain: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    specificity_level: Mapped[str | None] = sa_mapped_column(String(64), nullable=True)
+    priority: Mapped[int | None] = sa_mapped_column(Integer, nullable=True)
+    score: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    matched_evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    fallback_used: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+    alias_used: Mapped[bool] = sa_mapped_column(Boolean, default=False, nullable=False)
+
+
+class ClassificationEvidence(TimestampMixin, Base):
+    __tablename__ = "classification_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    source_system: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    evidence_stage: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    source_payload_id: Mapped[int | None] = sa_mapped_column(
+        ForeignKey("source_payloads.id"), nullable=True
+    )
+    source_endpoint_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    source_field_path: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_feature_key: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    candidate_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    final_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    disposition_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class CanonicalLabelRegistry(TimestampMixin, Base):
+    __tablename__ = "canonical_label_registry"
+    __table_args__ = (UniqueConstraint("canonical_label", "registry_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    canonical_label: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    registry_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    label_domain: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    label_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    definition: Mapped[str] = sa_mapped_column(Text, nullable=False)
+    source_rule_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+
+
+class RuleRegistry(TimestampMixin, Base):
+    __tablename__ = "rule_registry"
+    __table_args__ = (UniqueConstraint("rule_id", "rule_version"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    rule_id: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    rule_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    canonical_label: Mapped[str] = sa_mapped_column(String(160), nullable=False)
+    rule_family_id: Mapped[str | None] = sa_mapped_column(String(160), nullable=True)
+    rule_status: Mapped[str] = sa_mapped_column(String(64), nullable=False)
+    evidence_gates_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+
+
+class ProgramStandardEvidence(TimestampMixin, Base):
+    __tablename__ = "program_standard_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    program_domain: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    standard_name: Mapped[str | None] = sa_mapped_column(String(120), nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class TestEventDomain(TimestampMixin, Base):
+    __tablename__ = "test_event_domain"
+    __table_args__ = (UniqueConstraint("test_no", "domain_name"),)
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    domain_name: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    domain_confidence: Mapped[float | None] = sa_mapped_column(Numeric, nullable=True)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class ImpactDeviceEvidence(TimestampMixin, Base):
+    __tablename__ = "impact_device_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    device_type: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class RestraintEquipmentEvidence(TimestampMixin, Base):
+    __tablename__ = "restraint_equipment_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    equipment_type: Mapped[str] = sa_mapped_column(String(120), nullable=False)
+    evidence_json: Mapped[dict[str, Any] | None] = sa_mapped_column(SAJSON, nullable=True)
+
+
+class ClassificationFeatureEvidence(TimestampMixin, Base):
+    __tablename__ = "classification_feature_evidence"
+
+    id: Mapped[int] = sa_mapped_column(Integer, primary_key=True)
+    canonical_test_uid: Mapped[str] = sa_mapped_column(String(120), nullable=False, index=True)
+    test_no: Mapped[int] = sa_mapped_column(Integer, nullable=False, index=True)
+    classifier_version: Mapped[str] = sa_mapped_column(String(32), nullable=False)
+    normalized_text: Mapped[str | None] = sa_mapped_column(Text, nullable=True)
+    normalized_features_json: Mapped[dict[str, Any] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    source_payload_ids_json: Mapped[list[int] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    source_field_paths_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
+    extraction_warnings_json: Mapped[list[str] | None] = sa_mapped_column(
+        SAJSON, nullable=True
+    )
 
 
 class TestFacet(TimestampMixin, Base):
@@ -604,8 +899,14 @@ class FieldCoverageSnapshot(TimestampMixin, Base):
 __all__ = [
     "AssetSummary",
     "Barrier",
+    "BarrierLoadCellChannelMap",
+    "BarrierLoadCellClassification",
     "Base",
     "CanonicalRowSource",
+    "ClassificationAdjudication",
+    "ClassificationEvidence",
+    "ClassificationFeatureEvidence",
+    "CanonicalLabelRegistry",
     "CodeValue",
     "CollectionRun",
     "CollectionRunItem",
@@ -619,9 +920,13 @@ __all__ = [
     "InstrumentationChannelDetail",
     "IntrusionMeasurement",
     "InjuryMetric",
+    "ImpactDeviceEvidence",
     "MediaAsset",
     "Occupant",
+    "ProgramStandardEvidence",
     "Restraint",
+    "RestraintEquipmentEvidence",
+    "RuleRegistry",
     "SourceConflict",
     "SourceEndpoint",
     "SourceFieldCatalog",
@@ -629,8 +934,10 @@ __all__ = [
     "SourcePayloadObservation",
     "SourcePayloadSection",
     "TestFacet",
+    "TestEventDomain",
     "TestFilterSummary",
     "TestClassification",
+    "TestClassificationCandidate",
     "TestParticipant",
     "Vehicle",
 ]

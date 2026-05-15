@@ -4,14 +4,18 @@
 
 ## Project Guardrails
 
-- 이 프로젝트는 2011년 이후 NHTSA crash test metadata-only catalog DB다.
+- 이 프로젝트는 2011년 이후 NHTSA crash test metadata DB와 GUI-facing backend다.
+- 주요 제품 기능은 GUI에서 선택 asset 다운로드, DB 구축, DB 관리로 제한한다.
 - canonical/read-model 대상은 `test_date >= 2011-01-01`로 제한한다.
 - `modelYear`는 scope 판단 기준이 아니다.
 - `test_date` missing 또는 parse 실패 record는 canonical/read-model에서 제외한다.
-- 다운로드 실행, waveform 분석, UI, full crawler는 현재 범위가 아니다.
-- 기본 `pytest`, `scripts/verify.ps1`, `.harness/run.ps1`에서 live NHTSA API 호출은 금지한다.
+- 다운로드는 DB `media_assets`에 저장된 URL/metadata 기반의 선택 asset 다운로드만 허용한다.
+- waveform/TDMS/UDS/ABF/ISO/ZIP 내부 분석, unbounded download, full crawler는 현재 범위가 아니다.
+- 기본 `pytest`, `scripts/verify.ps1`, `.harness/run.ps1`에서 live NHTSA API 호출 또는 실제 다운로드는 금지한다.
 - live API는 manual validation 명령에서 `--source live`, `--allow-live`, `NHTSA_METADATA_ALLOW_LIVE=true`가 모두 있을 때만 허용한다.
 - `D:\vscode\pulse_analysis\data\db\nhtsa_data.db`는 bounded manifest seed reference로만 사용하고 source of truth로 승격하지 않는다.
+- 로컬 GUI/API keeper DB는 `data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite`이며, non-keeper runtime artifact는 `docs/db_baseline.md`의 archive policy를 따른다.
+- product CLI는 `catalog`, `db`, `download` 중심으로 유지하고 연구/검증 명령은 `ops` 또는 `legacy` 아래에 둔다.
 - 기존 `nhtsa_gui` / `nhtsa` 경로는 read-only reference로만 사용한다.
 - `.git`, `.venv`, DB, `data/manual`, cache, screenshots, response dumps는 복사하거나 커밋하지 않는다.
 
@@ -31,6 +35,15 @@
 - Keep changes minimal and directly tied to the requested task.
 - Do not perform drive-by refactors, broad formatting, dependency upgrades, or schema/API changes unless explicitly requested.
 - If a task is ambiguous, ask at most two clarifying questions. If safe to proceed, state assumptions and continue.
+
+## Workspace Policy
+
+- Do not create new git worktrees.
+- Do not create sibling repo folders.
+- Do not run `git worktree add`.
+- Do not clone this repository into another local folder.
+- Work only in the user-specified repository directory.
+- If branch isolation is needed but unsafe in the current directory, stop and report instead.
 
 ## Planning Policy
 

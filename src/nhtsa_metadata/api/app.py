@@ -1,4 +1,10 @@
-from fastapi import FastAPI
+from decimal import Decimal
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
 from nhtsa_metadata import __version__
@@ -19,7 +25,19 @@ from nhtsa_metadata.db.session import (
     ensure_schema,
 )
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.downloads import (
+    enqueue_download,
+    list_download_jobs,
+    list_downloadable_asset_page,
+    run_download_job,
+)
 from nhtsa_metadata.services.scope import is_in_scope_test_record
+
+
+class DownloadJobCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    media_asset_id: int
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,6 +47,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     session_factory = create_session_factory(effective_settings)
     app = FastAPI(title=effective_settings.app_name, version=__version__)
     app.state.settings = effective_settings
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def gui_shell() -> FileResponse:
+        return FileResponse(static_dir / "index.html")
 
     @app.get("/api/health")
     def health() -> dict[str, object]:
@@ -45,6 +69,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         test_type: str | None = None,
         vehicle_make: str | None = None,
         asset_kind: str | None = None,
+        vehicle_test_weight_min: float | None = None,
+        vehicle_test_weight_max: float | None = None,
+        curb_weight_min: float | None = None,
+        curb_weight_max: float | None = None,
+        vehicle_length_min: float | None = None,
+        vehicle_length_max: float | None = None,
+        vehicle_width_min: float | None = None,
+        vehicle_width_max: float | None = None,
+        wheelbase_min: float | None = None,
+        wheelbase_max: float | None = None,
+        vax_crush_distance_min: float | None = None,
+        vax_crush_distance_max: float | None = None,
+        has_load_cell_barrier: bool | None = None,
     ) -> dict[str, object]:
         with session_factory() as session:
             summaries = list(
@@ -61,6 +98,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             items = [item for item in items if _contains(item, "vehicle_makes", vehicle_make)]
         if asset_kind:
             items = [item for item in items if _contains(item, "asset_kinds", asset_kind)]
+        items = _filter_range(
+            items, "vehicle_test_weight", vehicle_test_weight_min, vehicle_test_weight_max
+        )
+        items = _filter_range(items, "curb_weight", curb_weight_min, curb_weight_max)
+        items = _filter_range(items, "vehicle_length", vehicle_length_min, vehicle_length_max)
+        items = _filter_range(items, "vehicle_width", vehicle_width_min, vehicle_width_max)
+        items = _filter_range(items, "wheelbase", wheelbase_min, wheelbase_max)
+        items = _filter_range(
+            items, "vax_crush_distance", vax_crush_distance_min, vax_crush_distance_max
+        )
+        if has_load_cell_barrier is not None:
+            items = [
+                item
+                for item in items
+                if item.get("has_load_cell_barrier") is has_load_cell_barrier
+            ]
         return {"items": items, "count": len(items)}
 
     @app.get("/api/tests/{test_no}")
@@ -103,6 +156,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "make": vehicle.make,
                         "model": vehicle.model,
                         "model_year": vehicle.model_year,
+                        "body_type": vehicle.body_type,
+                        "vehicle_speed": _number_out(vehicle.vehicle_speed),
+                        "vehicle_test_weight": _number_out(vehicle.vehicle_test_weight),
+                        "curb_weight": _number_out(vehicle.curb_weight),
+                        "vehicle_length": _number_out(vehicle.vehicle_length),
+                        "vehicle_width": _number_out(vehicle.vehicle_width),
+                        "wheelbase": _number_out(vehicle.wheelbase),
+                        "vax_crush_distance": _number_out(vehicle.vax_crush_distance),
                     }
                     for vehicle in vehicles
                 ],
@@ -146,6 +207,67 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             rows = CoverageService(session).report_rows()
         return {"items": [row.__dict__ for row in rows], "count": len(rows)}
 
+    @app.get("/api/download-assets")
+    def download_assets(
+        test_no: int | None = None,
+        asset_kind: str | None = None,
+        q: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict[str, object]:
+        with session_factory() as session:
+            items, total = list_downloadable_asset_page(
+                session,
+                test_no=test_no,
+                asset_kind=asset_kind,
+                q=q,
+                limit=limit,
+                offset=offset,
+            )
+        return {
+            "items": items,
+            "count": len(items),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.post("/api/download-jobs")
+    def create_download_job(payload: DownloadJobCreate) -> dict[str, object]:
+        with session_factory() as session:
+            try:
+                job = enqueue_download(
+                    session,
+                    payload.media_asset_id,
+                    effective_settings.download_dir,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            session.commit()
+            return job
+
+    @app.get("/api/download-jobs")
+    def download_jobs(status: str | None = None) -> dict[str, object]:
+        with session_factory() as session:
+            items = list_download_jobs(session, status=status)
+        return {"items": items, "count": len(items)}
+
+    @app.post("/api/download-jobs/{job_id}/run")
+    def run_download_job_endpoint(job_id: int) -> dict[str, object]:
+        with session_factory() as session:
+            try:
+                job = run_download_job(
+                    session,
+                    job_id,
+                    fetcher=getattr(app.state, "download_fetcher", None),
+                    timeout_seconds=effective_settings.default_timeout_seconds,
+                    max_bytes=effective_settings.max_download_bytes,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            session.commit()
+            return job
+
     @app.get("/api/collection-runs")
     def collection_runs() -> dict[str, object]:
         with session_factory() as session:
@@ -177,6 +299,27 @@ def _summary_out(summary: TestFilterSummary) -> dict[str, object]:
         "vehicle_models": summary.vehicle_models_json or [],
         "participant_kinds": summary.participant_kinds_json or [],
         "asset_kinds": summary.asset_kinds_json or [],
+        "vehicle_test_weight_min": _number_out(summary.vehicle_test_weight_min),
+        "vehicle_test_weight_max": _number_out(summary.vehicle_test_weight_max),
+        "curb_weight_min": _number_out(summary.curb_weight_min),
+        "curb_weight_max": _number_out(summary.curb_weight_max),
+        "vehicle_length_min": _number_out(summary.vehicle_length_min),
+        "vehicle_length_max": _number_out(summary.vehicle_length_max),
+        "vehicle_width_min": _number_out(summary.vehicle_width_min),
+        "vehicle_width_max": _number_out(summary.vehicle_width_max),
+        "wheelbase_min": _number_out(summary.wheelbase_min),
+        "wheelbase_max": _number_out(summary.wheelbase_max),
+        "vax_crush_distance_min": _number_out(summary.vax_crush_distance_min),
+        "vax_crush_distance_max": _number_out(summary.vax_crush_distance_max),
+        "has_load_cell_barrier": summary.has_load_cell_barrier,
+        "load_cell_barrier_classifications": (
+            summary.load_cell_barrier_classification_ids_json or []
+        ),
+        "load_cell_barrier_families": summary.load_cell_barrier_families_json or [],
+        "load_cell_barrier_config_version": summary.load_cell_barrier_config_version,
+        "load_cell_barrier_channel_count": summary.load_cell_barrier_channel_count,
+        "load_cell_barrier_force_channel_count": summary.load_cell_barrier_force_channel_count,
+        "load_cell_barrier_moment_channel_count": summary.load_cell_barrier_moment_channel_count,
         "has_uds_or_tdms_package": summary.has_uds_or_tdms_package,
     }
 
@@ -200,3 +343,42 @@ def _classification_out(classification: TestClassification | None) -> dict[str, 
 def _contains(item: dict[str, object], key: str, value: str) -> bool:
     candidate = item.get(key)
     return isinstance(candidate, list) and value in candidate
+
+
+def _filter_range(
+    items: list[dict[str, object]],
+    prefix: str,
+    requested_min: float | None,
+    requested_max: float | None,
+) -> list[dict[str, object]]:
+    if requested_min is None and requested_max is None:
+        return items
+    return [
+        item
+        for item in items
+        if _range_overlaps(
+            item.get(f"{prefix}_min"),
+            item.get(f"{prefix}_max"),
+            requested_min,
+            requested_max,
+        )
+    ]
+
+
+def _range_overlaps(
+    actual_min: object,
+    actual_max: object,
+    requested_min: float | None,
+    requested_max: float | None,
+) -> bool:
+    if not isinstance(actual_min, int | float) or not isinstance(actual_max, int | float):
+        return False
+    if requested_min is not None and actual_max < requested_min:
+        return False
+    if requested_max is not None and actual_min > requested_max:
+        return False
+    return True
+
+
+def _number_out(value: int | float | Decimal | None) -> float | None:
+    return float(value) if value is not None else None

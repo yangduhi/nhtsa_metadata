@@ -41,7 +41,7 @@ class IngestionService:
         self.session.flush()
         return saved_payloads
 
-    def rebuild_test(self, test_no: int) -> int:
+    def rebuild_test(self, test_no: int, rebuild_facets: bool = True) -> int:
         payloads = self.payload_service.get_latest_payloads_for_test(test_no)
         specs_by_payload = []
         all_specs = []
@@ -70,6 +70,6 @@ class IngestionService:
             self.session.flush()
             return 0
         inserted = self.canonical_service.replace_test_canonical_rows(test_no, specs_by_payload)
-        self.read_model_builder.rebuild_for_test(test_no)
+        self.read_model_builder.rebuild_for_test(test_no, rebuild_facets=rebuild_facets)
         self.session.flush()
         return inserted

@@ -90,6 +90,11 @@ def _vehicle_specs(row: SourceRow) -> list[CanonicalRowSpec]:
     vehicle_no = _first_int(data, "vehicleNo", "VEHNO")
     speed = parse_number(_first(data, "vehicleSpeed", "VEHSPD"))
     weight = parse_number(_first(data, "vehicleTestWeight", "VEHTWT"))
+    curb_weight = parse_number(_first(data, "curbWeight", "CURBWT"))
+    vehicle_length = parse_number(_first(data, "vehicleLength", "VEHLEN"))
+    vehicle_width = parse_number(_first(data, "vehicleWidth", "VEHWID"))
+    wheelbase = parse_number(_first(data, "wheelbase", "WHLBAS"))
+    vax_crush_distance = parse_number(_first(data, "vaxCrushDistance", "CRHDST"))
     make = _first(data, "vehicleMake", "MAKED")
     model = _first(data, "vehicleModel", "MODELD")
     vehicle_values = {
@@ -98,11 +103,22 @@ def _vehicle_specs(row: SourceRow) -> list[CanonicalRowSpec]:
         "make": make,
         "model": model,
         "model_year": _first_int(data, "modelYear", "YEAR"),
-        "engine_type": data.get("engineType"),
+        "engine_type": _first(data, "engineType", "ENGINED"),
+        "body_type": _first(data, "bodyType", "BODYD"),
         "vehicle_speed_raw": _to_raw(speed.raw_value),
         "vehicle_speed": speed.numeric_value,
         "vehicle_test_weight_raw": _to_raw(weight.raw_value),
         "vehicle_test_weight": weight.numeric_value,
+        "curb_weight_raw": _to_raw(curb_weight.raw_value),
+        "curb_weight": curb_weight.numeric_value,
+        "vehicle_length_raw": _to_raw(vehicle_length.raw_value),
+        "vehicle_length": vehicle_length.numeric_value,
+        "vehicle_width_raw": _to_raw(vehicle_width.raw_value),
+        "vehicle_width": vehicle_width.numeric_value,
+        "wheelbase_raw": _to_raw(wheelbase.raw_value),
+        "wheelbase": wheelbase.numeric_value,
+        "vax_crush_distance_raw": _to_raw(vax_crush_distance.raw_value),
+        "vax_crush_distance": vax_crush_distance.numeric_value,
     }
     participant_kind, reason = classify_participant(data)
     participant_values = {

@@ -1,0 +1,18 @@
+check,expected,actual,status,note
+total manifest rows,3891,3891,pass,
+manifest sha256,b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be,b4a1262938d33793bff0d4aca78222e4bab51c7253d4084fbb80597096abe6be,pass,
+missing tests,0,0,pass,
+classification live API used,0,0,pass,
+package/media/file download,0,0,pass,classifier and generator read metadata only
+known false-positive hard cases,0,0,pass,
+side pole over-confirmed,0,0,pass,
+sled classified as full vehicle crash,0,0,pass,
+original 47 unclassified all adjudicated,47,47,pass,
+classification evidence rows,3891,3891,pass,
+classification without evidence rows,0,0,pass,
+source evidence missing positive classifications,0,0,pass,
+negative evidence ignored known false-positive,0,0,pass,
+fallback_used not increased,<= 852,845,pass,
+generic_used not increased,<= 572,565,pass,
+no source DB mutation,verified,read-only sqlite connection,pass,source DB opened with mode=ro by artifact generator
+tests/results recorded,present,present,pass,CSV and Markdown acceptance artifacts generated
