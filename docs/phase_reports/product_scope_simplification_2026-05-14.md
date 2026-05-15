@@ -579,6 +579,74 @@ scripts/verify.ps1                                                              
 .harness/run.ps1                                                                PASS, 153 passed, 4 warnings
 ```
 
+### GUI dogfood follow-up: queue click-through safety validation - 2026-05-15
+
+A second dogfood pass validated the active queue affordance with a real browser runtime and a disposable copy of the keeper DB.
+
+Setup:
+
+```text
+Branch: codex/refactor-post-delivery-hardening
+Commit under test: 0987b3f feat: show active queue state in asset console
+Runtime URL: http://127.0.0.1:8765/
+DB under test: C:/Users/congd/AppData/Local/Temp/nhtsa_metadata_dogfood/queue_click_test.sqlite
+Source DB copied from: data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite
+Download dir under test: C:/Users/congd/AppData/Local/Temp/nhtsa_metadata_dogfood/downloads
+```
+
+The keeper DB itself was not mutated. The CDP/browser test used the temp copy so enqueue side effects stayed outside tracked source and outside the baseline artifact.
+
+Queue click-through result:
+
+```text
+Before click:
+- First asset id: 1
+- First button: Queue
+- Job count: 0 queued
+
+After clicking Queue:
+- Toast: Queued v07201R002.pdf as job #1
+- Header job count: 1 queued
+- First asset row action: disabled Queued #1
+- Jobs panel: one queued job card for v07201R002.pdf
+- Run button visible for the queued job
+```
+
+Safety checks:
+
+```text
+External browser requests: none
+/api/download-jobs/{job_id}/run requests: none during queueing
+Browser console/network relevant events: none
+Downloaded files written: none
+```
+
+Run confirmation guard check:
+
+```text
+Action: click Run, then reject the browser confirm dialog
+Confirm text: 이 job을 실행하면 실제 HTTP(S) 다운로드가 시작될 수 있습니다. 계속할까요?
+After cancel: job remained queued, no run endpoint request was sent, no external request was sent, no file was written
+```
+
+Visual dogfood evidence:
+
+```text
+C:/Users/congd/AppData/Local/Temp/nhtsa_metadata_dogfood/queue_click/before-queue-click.png
+C:/Users/congd/AppData/Local/Temp/nhtsa_metadata_dogfood/queue_click/after-queue-click.png
+C:/Users/congd/AppData/Local/Temp/nhtsa_metadata_dogfood/jobs_run_cancel/jobs-panel-after-run-cancel.png
+```
+
+Visual result: the `Queued #1` disabled button, queued job status chip, Run button, and toast were readable and distinct. No commit-blocking clipping, overlap, or readability issue was found in the checked browser viewport.
+
+Verification after this dogfood pass:
+
+```text
+./.venv/Scripts/python.exe -m pytest -q      PASS, 153 passed, 4 warnings
+```
+
+Note: plain `pytest -q` from the current shell resolved to a Python environment without the editable package installed and failed with `ModuleNotFoundError: No module named 'nhtsa_metadata'`. The README-documented venv interpreter command above passed, so this is an invocation/environment issue rather than a regression in the branch.
+
 ## Remaining Next Steps
 
 1. If a downstream GUI exists, either embed this local console route or port its API wiring to that frontend.
