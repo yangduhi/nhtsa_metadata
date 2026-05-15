@@ -16,6 +16,7 @@ from nhtsa_metadata.services.downloads import (
     DownloadFetchResult,
     enqueue_download,
     list_download_jobs,
+    list_downloadable_asset_page,
     list_downloadable_assets,
     run_download_job,
 )
@@ -80,6 +81,28 @@ def test_enqueue_download_creates_queued_job_with_sanitized_destination(
     with session_factory() as session:
         jobs = list_download_jobs(session)
     assert jobs[0]["status"] == "queued"
+
+
+def test_enqueue_download_reuses_existing_active_job_and_marks_asset_page(
+    tmp_settings: Settings, tmp_path: Path
+) -> None:
+    asset_id = _seed_asset(tmp_settings)
+    session_factory = create_session_factory(tmp_settings)
+
+    with session_factory() as session:
+        first = enqueue_download(session, asset_id, tmp_path / "downloads")
+        second = enqueue_download(session, asset_id, tmp_path / "downloads")
+        session.commit()
+
+    assert second["id"] == first["id"]
+    assert second["already_queued"] is True
+
+    with session_factory() as session:
+        assets, total = list_downloadable_asset_page(session, test_no=10001, limit=50)
+
+    assert total == 1
+    assert assets[0]["queued_job_id"] == first["id"]
+    assert assets[0]["queued_job_status"] == "queued"
 
 
 def test_run_download_job_writes_file_using_registered_asset_url(

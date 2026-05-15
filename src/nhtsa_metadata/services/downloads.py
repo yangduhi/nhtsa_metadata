@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from nhtsa_metadata.db.models import CrashTest, DownloadJob, MediaAsset
 
+ACTIVE_JOB_STATUSES = ("queued", "running")
+
 
 @dataclass(frozen=True)
 class DownloadFetchResult:
@@ -62,7 +64,8 @@ def list_downloadable_asset_page(
     if limit is not None:
         statement = statement.limit(limit)
     rows = session.execute(statement).all()
-    return [_asset_summary(asset, test) for asset, test in rows], total
+    active_jobs = _active_jobs_by_asset_id(session, [asset.id for asset, _test in rows])
+    return [_asset_summary(asset, test, active_jobs.get(asset.id)) for asset, test in rows], total
 
 
 def _downloadable_asset_statement(
@@ -100,6 +103,16 @@ def enqueue_download(
     asset = session.get(MediaAsset, media_asset_id)
     if asset is None:
         raise ValueError(f"media asset not found: {media_asset_id}")
+    existing_job = session.scalar(
+        select(DownloadJob)
+        .where(
+            DownloadJob.media_asset_id == media_asset_id,
+            DownloadJob.status.in_(ACTIVE_JOB_STATUSES),
+        )
+        .order_by(DownloadJob.id)
+    )
+    if existing_job is not None:
+        return _job_summary(existing_job, already_queued=True)
     test = session.get(CrashTest, asset.test_id)
     filename = _safe_filename(asset)
     destination_path = Path(download_dir) / filename
@@ -116,6 +129,26 @@ def enqueue_download(
     session.add(job)
     session.flush()
     return _job_summary(job)
+
+
+def _active_jobs_by_asset_id(
+    session: Session,
+    asset_ids: list[int],
+) -> dict[int, DownloadJob]:
+    if not asset_ids:
+        return {}
+    jobs = session.scalars(
+        select(DownloadJob)
+        .where(
+            DownloadJob.media_asset_id.in_(asset_ids),
+            DownloadJob.status.in_(ACTIVE_JOB_STATUSES),
+        )
+        .order_by(DownloadJob.id)
+    )
+    active_jobs: dict[int, DownloadJob] = {}
+    for job in jobs:
+        active_jobs.setdefault(job.media_asset_id, job)
+    return active_jobs
 
 
 def list_download_jobs(
@@ -207,7 +240,11 @@ def _download_url_to_path(
     return size_bytes, content_type
 
 
-def _asset_summary(asset: MediaAsset, test: CrashTest) -> dict[str, object]:
+def _asset_summary(
+    asset: MediaAsset,
+    test: CrashTest,
+    active_job: DownloadJob | None = None,
+) -> dict[str, object]:
     return {
         "id": asset.id,
         "test_id": asset.test_id,
@@ -218,15 +255,18 @@ def _asset_summary(asset: MediaAsset, test: CrashTest) -> dict[str, object]:
         "suggested_filename": asset.suggested_filename,
         "content_type": asset.content_type,
         "size_bytes": asset.size_bytes,
+        "queued_job_id": active_job.id if active_job is not None else None,
+        "queued_job_status": active_job.status if active_job is not None else None,
     }
 
 
-def _job_summary(job: DownloadJob) -> dict[str, object]:
+def _job_summary(job: DownloadJob, *, already_queued: bool = False) -> dict[str, object]:
     return {
         "id": job.id,
         "media_asset_id": job.media_asset_id,
         "test_no": job.test_no,
         "status": job.status,
+        "already_queued": already_queued,
         "source_url": job.source_url,
         "destination_path": job.destination_path,
         "filename": job.filename,

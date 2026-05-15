@@ -72,11 +72,15 @@ def test_gui_shell_and_static_assets_are_served(tmp_path: Path) -> None:
     assert "assetConsoleApp" in shell.text
     assert "/static/gui.css" in shell.text
     assert "/static/gui.js" in shell.text
+    assert "rel=\"icon\"" in shell.text
+    assert "data:image/svg+xml" in shell.text
 
     script = client.get("/static/gui.js")
     assert script.status_code == 200
     assert "fetchJson('/api/download-assets" in script.text
     assert "createDownloadJob" in script.text
+    assert "queued_job_id" in script.text
+    assert "Queued #" in script.text
 
 
 def test_download_assets_api_supports_gui_pagination_and_search(tmp_path: Path) -> None:

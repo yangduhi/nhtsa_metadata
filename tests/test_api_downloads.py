@@ -58,13 +58,28 @@ def test_download_asset_listing_and_queue_api(tmp_path: Path) -> None:
 
     assets = client.get("/api/download-assets", params={"test_no": 10001})
     assert assets.status_code == 200
-    assert assets.json()["items"][0]["id"] == asset_id
+    asset = assets.json()["items"][0]
+    assert asset["id"] == asset_id
+    assert asset["queued_job_id"] is None
+    assert asset["queued_job_status"] is None
 
     created = client.post("/api/download-jobs", json={"media_asset_id": asset_id})
     assert created.status_code == 200
     body = created.json()
     assert body["status"] == "queued"
     assert body["media_asset_id"] == asset_id
+    assert body["already_queued"] is False
+
+    duplicate = client.post("/api/download-jobs", json={"media_asset_id": asset_id})
+    assert duplicate.status_code == 200
+    duplicate_body = duplicate.json()
+    assert duplicate_body["id"] == body["id"]
+    assert duplicate_body["already_queued"] is True
+
+    assets_after_queue = client.get("/api/download-assets", params={"test_no": 10001})
+    queued_asset = assets_after_queue.json()["items"][0]
+    assert queued_asset["queued_job_id"] == body["id"]
+    assert queued_asset["queued_job_status"] == "queued"
 
     jobs = client.get("/api/download-jobs")
     assert jobs.status_code == 200

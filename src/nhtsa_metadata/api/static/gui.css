@@ -45,6 +45,15 @@ select {
 
 button { cursor: pointer; }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+button:disabled:hover {
+  transform: none;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);

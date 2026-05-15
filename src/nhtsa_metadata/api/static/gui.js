@@ -84,14 +84,22 @@ function renderAssets(items) {
     elements.assetRows.innerHTML = '<tr><td colspan="5" class="empty-cell">No assets match the current filters.</td></tr>';
     return;
   }
-  elements.assetRows.innerHTML = items.map((asset) => `
+  elements.assetRows.innerHTML = items.map((asset) => {
+    const queuedJobId = asset.queued_job_id;
+    const queuedJobStatus = asset.queued_job_status || 'queued';
+    const isQueued = queuedJobId !== null && queuedJobId !== undefined;
+    const action = isQueued
+      ? `<button class="button ghost" type="button" disabled title="Already ${escapeHtml(queuedJobStatus)} as job #${escapeHtml(queuedJobId)}">Queued #${escapeHtml(queuedJobId)}</button>`
+      : `<button class="button ghost" type="button" data-action="queueAsset" data-asset-id="${asset.id}">Queue</button>`;
+    return `
     <tr>
       <td><strong>${escapeHtml(asset.test_no)}</strong></td>
       <td><span class="asset-kind">${escapeHtml(asset.asset_kind || 'unknown')}</span></td>
       <td class="file-cell" title="${escapeHtml(asset.suggested_filename || '')}">${escapeHtml(asset.suggested_filename || 'asset_' + asset.id)}</td>
       <td class="url-cell" title="${escapeHtml(asset.source_url || '')}">${escapeHtml(asset.source_url || '—')}</td>
-      <td class="right"><button class="button ghost" type="button" data-action="queueAsset" data-asset-id="${asset.id}">Queue</button></td>
-    </tr>`).join('');
+      <td class="right">${action}</td>
+    </tr>`;
+  }).join('');
 }
 
 async function createDownloadJob(assetId) {
@@ -100,8 +108,12 @@ async function createDownloadJob(assetId) {
       method: 'POST',
       body: JSON.stringify({ media_asset_id: Number(assetId) }),
     });
-    showToast(`Queued ${job.filename || 'asset'} as job #${job.id}`);
-    await loadJobs();
+    if (job.already_queued) {
+      showToast(`Already queued as job #${job.id}`);
+    } else {
+      showToast(`Queued ${job.filename || 'asset'} as job #${job.id}`);
+    }
+    await Promise.all([loadJobs(), loadAssets()]);
   } catch (error) {
     showToast(`Queue failed: ${error.message}`);
   }

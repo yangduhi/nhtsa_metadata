@@ -546,6 +546,39 @@ browser console after load/filter                                        PASS, n
 
 Browser smoke confirmed the real keeper DB page loads `50 / 290845` assets, search filtering reduced `v07201R002` to `1 / 1`, and the visual layout had no commit-blocking overlap/clipping issues.
 
+### GUI dogfood follow-up: active queue affordance
+
+A follow-up dogfood pass tightened the queue UX:
+
+- `GET /api/download-assets` now includes `queued_job_id` and `queued_job_status` for any active `queued` or `running` job on the returned page.
+- `POST /api/download-jobs` reuses an existing active job for the same media asset instead of creating duplicate queued jobs, returning `already_queued: true` when reuse happens.
+- The local GUI refreshes the asset browser after queueing and disables already queued rows with a `Queued #<job_id>` affordance.
+- The page declares an inline SVG favicon to avoid noisy `/favicon.ico` 404 browser log entries during QA.
+
+Dogfood/browser verification:
+
+```text
+Chrome headless CDP at http://127.0.0.1:8000/  PASS
+- API status: ok
+- Environment: local
+- Asset page count: 50 / 290845
+- Visible queue buttons: 50
+- Browser page console/network relevant events: none
+- Jobs panel empty state visible after scroll: PASS
+- No live NHTSA API calls and no job run/download side effects performed
+```
+
+Regression verification:
+
+```text
+pytest tests/test_downloads.py tests/test_api_downloads.py tests/test_gui_frontend.py -q  PASS, 9 passed
+ruff check src tests alembic                                                    PASS
+mypy src/nhtsa_metadata                                                         PASS, 57 source files
+pytest -q                                                                       PASS, 153 passed, 4 warnings
+scripts/verify.ps1                                                              PASS, 153 passed, 4 warnings
+.harness/run.ps1                                                                PASS, 153 passed, 4 warnings
+```
+
 ## Remaining Next Steps
 
 1. If a downstream GUI exists, either embed this local console route or port its API wiring to that frontend.
