@@ -187,10 +187,20 @@ CREATE TABLE IF NOT EXISTS classification_evidence (
     id INTEGER PRIMARY KEY,
     source_system TEXT NOT NULL,
     canonical_test_uid TEXT NOT NULL,
+    test_no INTEGER NOT NULL,
+    classifier_version TEXT NOT NULL,
+    evidence_stage TEXT NOT NULL,
+    source_payload_id INTEGER,
+    source_endpoint_name TEXT,
+    source_field_path TEXT,
+    normalized_feature_key TEXT,
+    candidate_rule_id TEXT,
+    final_status TEXT NOT NULL,
+    disposition_status TEXT NOT NULL,
+    evidence_json TEXT,
     classification_rule_id TEXT,
     classification_label TEXT,
-    evidence_status TEXT NOT NULL,
-    source_payload_id INTEGER,
+    evidence_status TEXT,
     endpoint_name TEXT,
     field_catalog_id INTEGER,
     json_path TEXT,
@@ -240,6 +250,9 @@ CREATE INDEX IF NOT EXISTS ix_relationship_edges_endpoint
 
 CREATE INDEX IF NOT EXISTS ix_classification_evidence_test
     ON classification_evidence(canonical_test_uid);
+
+CREATE INDEX IF NOT EXISTS ix_classification_evidence_test_no
+    ON classification_evidence(test_no);
 
 CREATE INDEX IF NOT EXISTS ix_classification_evidence_payload
     ON classification_evidence(source_payload_id);

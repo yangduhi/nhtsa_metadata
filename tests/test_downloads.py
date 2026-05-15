@@ -128,6 +128,65 @@ def test_run_download_job_writes_file_using_registered_asset_url(
     assert Path(completed["destination_path"]).read_bytes() == b"pdf"
 
 
+def test_run_download_job_persists_failed_status_before_reraising(
+    tmp_settings: Settings, tmp_path: Path
+) -> None:
+    asset_id = _seed_asset(tmp_settings)
+    session_factory = create_session_factory(tmp_settings)
+
+    def failing_fetch(_url: str) -> DownloadFetchResult:
+        raise RuntimeError("network broke")
+
+    with session_factory() as session:
+        job = enqueue_download(session, asset_id, tmp_path / "downloads")
+        session.commit()
+        with pytest.raises(RuntimeError, match="network broke"):
+            run_download_job(session, int(job["id"]), fetcher=failing_fetch)
+
+    with session_factory() as session:
+        [failed_job] = list_download_jobs(session)
+
+    assert failed_job["status"] == "failed"
+    assert failed_job["error"] == {"type": "RuntimeError", "message": "network broke"}
+
+
+def test_run_download_job_rejects_http_response_over_max_bytes_before_writing(
+    monkeypatch: pytest.MonkeyPatch, tmp_settings: Settings, tmp_path: Path
+) -> None:
+    asset_id = _seed_asset(tmp_settings)
+    session_factory = create_session_factory(tmp_settings)
+
+    class FakeResponse:
+        headers = {"content-type": "application/pdf", "content-length": "4"}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):  # type: ignore[no-untyped-def]
+            yield b"pdf!"
+
+    class FakeStream:
+        def __enter__(self) -> FakeResponse:
+            return FakeResponse()
+
+        def __exit__(self, *args: object) -> bool:
+            return False
+
+    def fake_stream(*args: object, **kwargs: object) -> FakeStream:
+        return FakeStream()
+
+    monkeypatch.setattr("nhtsa_metadata.services.downloads.httpx.stream", fake_stream)
+
+    with session_factory() as session:
+        job = enqueue_download(session, asset_id, tmp_path / "downloads")
+        session.commit()
+        destination = Path(job["destination_path"])
+        with pytest.raises(ValueError, match="exceeds maximum download size"):
+            run_download_job(session, int(job["id"]), max_bytes=3)
+
+    assert not destination.exists()
+
+
 def test_enqueue_download_rejects_unknown_asset(tmp_settings: Settings, tmp_path: Path) -> None:
     ensure_schema(create_engine_for_settings(tmp_settings))
     session_factory = create_session_factory(tmp_settings)

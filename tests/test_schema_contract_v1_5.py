@@ -6,13 +6,42 @@ import json
 import sqlite3
 from pathlib import Path
 
-from nhtsa_metadata.db.migrations import upgrade_head
+from alembic import command
+from sqlalchemy import create_engine, inspect
+
+from nhtsa_metadata.db.migrations import alembic_config, upgrade_head
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_SCHEMA = REPO_ROOT / "data" / "schema"
 DOCS_SCHEMA = REPO_ROOT / "docs" / "schema"
 LOCK_PATH = DATA_SCHEMA / "stage_f_schema_artifact_registry_2011plus_2026-04-30.lock"
 MIGRATION_PATH = REPO_ROOT / "migrations" / "0003_schema_contract_v1_5.sql"
+CLASSIFICATION_EVIDENCE_LINEAGE_COLUMNS = {
+    "id",
+    "source_system",
+    "canonical_test_uid",
+    "test_no",
+    "classifier_version",
+    "evidence_stage",
+    "source_payload_id",
+    "source_endpoint_name",
+    "source_field_path",
+    "normalized_feature_key",
+    "candidate_rule_id",
+    "final_status",
+    "disposition_status",
+    "evidence_json",
+}
+CLASSIFICATION_EVIDENCE_COMPATIBILITY_COLUMNS = {
+    "classification_rule_id",
+    "classification_label",
+    "evidence_status",
+    "endpoint_name",
+    "field_catalog_id",
+    "json_path",
+    "evidence_value",
+    "provenance_json",
+}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -163,3 +192,46 @@ def test_schema_contract_v1_5_sql_migration_is_additive(tmp_path: Path) -> None:
         ]
     finally:
         con.close()
+
+
+def test_schema_contract_v1_5_sql_uses_alembic_lineage_evidence_shape(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "contract.sqlite"
+    con = sqlite3.connect(database_path)
+    try:
+        con.executescript(MIGRATION_PATH.read_text(encoding="utf-8"))
+        columns = {
+            row[1]: {"notnull": row[3]}
+            for row in con.execute("pragma table_info(classification_evidence)")
+        }
+    finally:
+        con.close()
+
+    column_names = set(columns)
+    assert CLASSIFICATION_EVIDENCE_LINEAGE_COLUMNS <= column_names
+    assert CLASSIFICATION_EVIDENCE_COMPATIBILITY_COLUMNS <= column_names
+    assert all(
+        columns[column]["notnull"] == 0
+        for column in CLASSIFICATION_EVIDENCE_COMPATIBILITY_COLUMNS
+    )
+
+
+def test_schema_contract_sql_before_alembic_head_preserves_lineage_evidence_shape(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "contract_before_head.sqlite"
+    database_url = f"sqlite:///{database_path}"
+    config = alembic_config(database_url)
+
+    command.upgrade(config, "0003_classification_disposition")
+    con = sqlite3.connect(database_path)
+    try:
+        con.executescript(MIGRATION_PATH.read_text(encoding="utf-8"))
+    finally:
+        con.close()
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    columns = {column["name"] for column in inspect(engine).get_columns("classification_evidence")}
+    assert CLASSIFICATION_EVIDENCE_LINEAGE_COLUMNS <= columns

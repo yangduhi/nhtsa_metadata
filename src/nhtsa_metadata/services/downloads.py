@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy import Select, String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
+from nhtsa_metadata.constants import DEFAULT_MAX_DOWNLOAD_BYTES
 from nhtsa_metadata.db.models import CrashTest, DownloadJob, MediaAsset
 
 ACTIVE_JOB_STATUSES = ("queued", "running")
@@ -115,7 +116,7 @@ def enqueue_download(
         return _job_summary(existing_job, already_queued=True)
     test = session.get(CrashTest, asset.test_id)
     filename = _safe_filename(asset)
-    destination_path = Path(download_dir) / filename
+    destination_path = _destination_path(download_dir, filename)
     job = DownloadJob(
         media_asset_id=asset.id,
         test_no=test.test_no if test is not None else None,
@@ -168,6 +169,7 @@ def run_download_job(
     *,
     fetcher: DownloadFetcher | None = None,
     timeout_seconds: float = 30.0,
+    max_bytes: int = DEFAULT_MAX_DOWNLOAD_BYTES,
 ) -> dict[str, object]:
     """Run a queued DB-registered download job.
 
@@ -184,13 +186,14 @@ def run_download_job(
     try:
         if fetcher is None:
             size_bytes, content_type = _download_url_to_path(
-                job.source_url, destination, timeout_seconds=timeout_seconds
+                job.source_url,
+                destination,
+                timeout_seconds=timeout_seconds,
+                max_bytes=max_bytes,
             )
         else:
             result = fetcher(job.source_url)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(result.content)
-            size_bytes = len(result.content)
+            size_bytes = _write_download_content(destination, result.content, max_bytes=max_bytes)
             content_type = result.content_type
         job.status = "completed"
         job.content_type = content_type or job.content_type
@@ -204,6 +207,7 @@ def run_download_job(
         job.finished_at = datetime.utcnow()
         job.error_json = {"type": exc.__class__.__name__, "message": str(exc)}
         session.flush()
+        session.commit()
         raise
 
 
@@ -212,7 +216,9 @@ def _download_url_to_path(
     destination: Path,
     *,
     timeout_seconds: float,
+    max_bytes: int,
 ) -> tuple[int, str | None]:
+    _validate_max_bytes(max_bytes)
     parsed = urlparse(source_url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("only HTTP(S) media asset URLs can be downloaded")
@@ -229,15 +235,58 @@ def _download_url_to_path(
         ) as response:
             response.raise_for_status()
             content_type = response.headers.get("content-type")
+            content_length = _content_length(response.headers.get("content-length"))
+            if content_length is not None and content_length > max_bytes:
+                raise ValueError(_max_download_size_message(content_length, max_bytes))
             with temp_path.open("wb") as output:
                 for chunk in response.iter_bytes():
-                    output.write(chunk)
+                    if not chunk:
+                        continue
                     size_bytes += len(chunk)
+                    if size_bytes > max_bytes:
+                        raise ValueError(_max_download_size_message(size_bytes, max_bytes))
+                    output.write(chunk)
         temp_path.replace(destination)
     finally:
         if temp_path.exists():
             temp_path.unlink()
     return size_bytes, content_type
+
+
+def _write_download_content(destination: Path, content: bytes, *, max_bytes: int) -> int:
+    _validate_max_bytes(max_bytes)
+    size_bytes = len(content)
+    if size_bytes > max_bytes:
+        raise ValueError(_max_download_size_message(size_bytes, max_bytes))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(content)
+    return size_bytes
+
+
+def _destination_path(download_dir: str | Path, filename: str) -> Path:
+    root = Path(download_dir).expanduser().resolve(strict=False)
+    destination = (root / filename).resolve(strict=False)
+    if not destination.is_relative_to(root):
+        raise ValueError("download destination escapes configured download directory")
+    return destination
+
+
+def _content_length(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _validate_max_bytes(max_bytes: int) -> None:
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+
+
+def _max_download_size_message(size_bytes: int, max_bytes: int) -> str:
+    return f"download size {size_bytes} exceeds maximum download size {max_bytes}"
 
 
 def _asset_summary(

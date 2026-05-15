@@ -86,6 +86,22 @@ def test_download_asset_listing_and_queue_api(tmp_path: Path) -> None:
     assert jobs.json()["count"] == 1
 
 
+def test_download_job_create_rejects_public_download_dir_override(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    asset_id = _seed_asset(settings)
+    app = create_app(settings)
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/download-jobs",
+        json={"media_asset_id": asset_id, "download_dir": str(tmp_path / "outside")},
+    )
+
+    assert created.status_code == 422
+    jobs = client.get("/api/download-jobs")
+    assert jobs.json() == {"items": [], "count": 0}
+
+
 def test_download_job_run_api_uses_injected_fetcher(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     asset_id = _seed_asset(settings)

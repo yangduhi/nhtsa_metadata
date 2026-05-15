@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from alembic import op
 from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, Numeric, String, Text, inspect
+from sqlalchemy.schema import UniqueConstraint
 
 revision = "0003_classification_disposition"
 down_revision = "0002_discovery_provenance"
@@ -63,16 +64,16 @@ def upgrade() -> None:
             Column("evidence_json", JSON, nullable=True),
             Column("created_at", String, nullable=False),
             Column("updated_at", String, nullable=True),
+            UniqueConstraint(
+                "test_no",
+                "classifier_version",
+                name="uq_classification_adjudication_test_no_version",
+            ),
         )
         op.create_index(
             "ix_classification_adjudication_test_no",
             "classification_adjudication",
             ["test_no"],
-        )
-        op.create_unique_constraint(
-            "uq_classification_adjudication_test_no_version",
-            "classification_adjudication",
-            ["test_no", "classifier_version"],
         )
     if "test_classification_candidates" not in tables:
         op.create_table(
@@ -94,16 +95,17 @@ def upgrade() -> None:
             Column("alias_used", Boolean, nullable=False),
             Column("created_at", String, nullable=False),
             Column("updated_at", String, nullable=True),
+            UniqueConstraint(
+                "test_no",
+                "classifier_version",
+                "rank",
+                name="uq_test_classification_candidates_test_no_version_rank",
+            ),
         )
         op.create_index(
             "ix_test_classification_candidates_test_no",
             "test_classification_candidates",
             ["test_no"],
-        )
-        op.create_unique_constraint(
-            "uq_test_classification_candidates_test_no_version_rank",
-            "test_classification_candidates",
-            ["test_no", "classifier_version", "rank"],
         )
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
 from nhtsa_metadata import __version__
@@ -35,8 +35,9 @@ from nhtsa_metadata.services.scope import is_in_scope_test_record
 
 
 class DownloadJobCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     media_asset_id: int
-    download_dir: str | None = None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -238,7 +239,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 job = enqueue_download(
                     session,
                     payload.media_asset_id,
-                    payload.download_dir or effective_settings.download_dir,
+                    effective_settings.download_dir,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -260,6 +261,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     job_id,
                     fetcher=getattr(app.state, "download_fetcher", None),
                     timeout_seconds=effective_settings.default_timeout_seconds,
+                    max_bytes=effective_settings.max_download_bytes,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -1,6 +1,7 @@
+from alembic import command
 from sqlalchemy import create_engine, inspect
 
-from nhtsa_metadata.db.migrations import downgrade_base, upgrade_head
+from nhtsa_metadata.db.migrations import alembic_config, downgrade_base, upgrade_head
 
 
 def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -88,3 +89,37 @@ def test_alembic_upgrade_and_downgrade(tmp_path) -> None:  # type: ignore[no-unt
 
     downgrade_base(database_url)
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}
+
+
+def test_alembic_upgrades_existing_sqlite_database_from_0002_to_head(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'existing.sqlite'}"
+    config = alembic_config(database_url)
+
+    command.upgrade(config, "0002_discovery_provenance")
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    assert "classification_adjudication" in inspect(engine).get_table_names()
+    candidate_unique_constraints = inspect(engine).get_unique_constraints(
+        "test_classification_candidates"
+    )
+    candidate_unique_sets = {tuple(item["column_names"]) for item in candidate_unique_constraints}
+    assert ("test_no", "classifier_version", "rank") in candidate_unique_sets
+
+
+def test_alembic_upgrades_legacy_sqlite_database_stamped_at_0002_to_head(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_path = tmp_path / "legacy.sqlite"
+    database_url = f"sqlite:///{database_path}"
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE tests (id INTEGER PRIMARY KEY)")
+        connection.exec_driver_sql("CREATE TABLE source_payloads (id INTEGER PRIMARY KEY)")
+        connection.exec_driver_sql("CREATE TABLE test_classification (id INTEGER PRIMARY KEY)")
+
+    config = alembic_config(database_url)
+    command.stamp(config, "0002_discovery_provenance")
+    command.upgrade(config, "head")
+
+    inspector = inspect(engine)
+    assert "classification_adjudication" in inspector.get_table_names()
+    assert "test_classification_candidates" in inspector.get_table_names()

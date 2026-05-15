@@ -215,6 +215,7 @@ def download_run_job(
             session,
             job_id,
             timeout_seconds=settings.default_timeout_seconds,
+            max_bytes=settings.max_download_bytes,
         )
         session.commit()
     _print_json(job)

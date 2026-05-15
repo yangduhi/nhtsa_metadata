@@ -11,6 +11,7 @@ from nhtsa_metadata.constants import (
     DEFAULT_DATABASE_URL,
     DEFAULT_DOWNLOAD_DIR,
     DEFAULT_ENVIRONMENT,
+    DEFAULT_MAX_DOWNLOAD_BYTES,
     DEFAULT_MIN_TEST_DATE,
     DEFAULT_NHTSA_BASE_URL,
     DEFAULT_RATE_LIMIT_DELAY_SECONDS,
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     rate_limit_delay_seconds: float = DEFAULT_RATE_LIMIT_DELAY_SECONDS
     min_test_date: date = DEFAULT_MIN_TEST_DATE
     download_dir: str = DEFAULT_DOWNLOAD_DIR
+    max_download_bytes: int = DEFAULT_MAX_DOWNLOAD_BYTES
     reference_database_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
