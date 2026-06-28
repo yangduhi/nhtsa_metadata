@@ -58,6 +58,33 @@ harness scripts. Bounded live validation requires `--source live`, `--allow-live
 The local reference DB at `D:\vscode\pulse_analysis\data\db\nhtsa_data.db` may be used only as a
 bounded manifest seed. It is not the source of truth for canonical metadata.
 
+## Metadata refresh v10 local runtime
+
+After user approval on 2026-06-28, the local `.env` may point at the finalized 2011+ DB:
+
+```text
+NHTSA_METADATA_DATABASE_URL=sqlite:///D:/vscode/nhtsa_metadata/data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite
+NHTSA_METADATA_ALLOW_LIVE=true
+```
+
+Run the local API/GUI:
+
+```bash
+uv run uvicorn nhtsa_metadata.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+Useful endpoints:
+
+- `http://127.0.0.1:8000/metadata-refresh`
+- `http://127.0.0.1:8000/api/metadata-refresh/v10/summary`
+- `http://127.0.0.1:8000/api/tests?metadata_flag=live_summary_missing_v10`
+- `http://127.0.0.1:8000/api/tests?metadata_flag=source_semantics_conflict_v10`
+- `http://127.0.0.1:8000/api/filter-options`
+
+When the v10 DB objects are present, `/api/tests`, `/api/tests/{test_no}`, and
+`/api/filter-options` prefer the approved `metadata_refresh_v10_final` overlay read models while
+preserving original source/canonical rows.
+
 ## Project Layout
 
 ```text
