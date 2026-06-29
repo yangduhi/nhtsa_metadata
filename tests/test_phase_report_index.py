@@ -31,7 +31,7 @@ def test_phase_report_manifest_covers_reports() -> None:
 
 def test_phase_report_manifest_is_sorted_and_informative() -> None:
     rows = list(csv.DictReader(MANIFEST_PATH.open(encoding="utf-8", newline="")))
-    assert len(rows) == 48
+    assert len(rows) == 49
     sort_keys = [row["sort_key"] for row in rows]
     assert sort_keys == sorted(sort_keys)
     for row in rows:

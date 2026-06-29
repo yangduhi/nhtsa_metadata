@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -28,6 +28,10 @@ from nhtsa_metadata.db.session import (
     ensure_schema,
 )
 from nhtsa_metadata.services.coverage_service import CoverageService
+from nhtsa_metadata.services.safety_ratings_overlay import (
+    safety_rating_match_for_test,
+    safety_rating_overlay_summary,
+)
 from nhtsa_metadata.services.scope import is_in_scope_test_record
 
 FINAL_SUMMARY_TABLE = "metadata_refresh_test_filter_summary_v10"
@@ -37,6 +41,197 @@ FINAL_CLASSIFICATION_TABLE = "metadata_refresh_test_classification_v10"
 FINAL_METRICS_TABLE = "metadata_refresh_v10_final_summary"
 FINAL_OPEN5_TABLE = "metadata_refresh_open5_final_recommendation_v10"
 FINAL_SCENARIO_TABLE = "metadata_refresh_scenario_trajectory_v10"
+
+CRASH_FAMILY_GROUP_ORDER = (
+    "Frontal",
+    "Side",
+    "Rear",
+    "Rollover",
+    "ADAS",
+    "PED",
+    "EJM",
+    "Child Restraint",
+    "Airbag / Occupant Protection",
+    "Interior Fitting",
+    "Sled / Research",
+    "Bumper / Damageability",
+)
+
+CRASH_FAMILY_TO_GROUP = {
+    "FRONTAL_FIXED_BARRIER": "Frontal",
+    "FRONTAL_OBLIQUE_RMDB": "Frontal",
+    "FRONTAL_OBLIQUE_RMDB_EDGE": "Frontal",
+    "FRONTAL_OFFSET": "Frontal",
+    "SIDE_MDB": "Side",
+    "SIDE_POLE": "Side",
+    "REAR_IMPACT": "Rear",
+    "ROLLOVER": "Rollover",
+    "ADAS_FCW": "ADAS",
+    "ADAS_LDW": "ADAS",
+    "ADAS_TJA": "ADAS",
+    "PEDESTRIAN": "PED",
+    "EJM": "EJM",
+    "CHILD_RESTRAINT": "Child Restraint",
+    "AIRBAG_DEPLOYMENT": "Airbag / Occupant Protection",
+    "INTERIOR_FITTING_OR_SEAT_RESEARCH": "Interior Fitting",
+    "SLED_RESEARCH": "Sled / Research",
+    "BUMPER_DAMAGEABILITY": "Bumper / Damageability",
+}
+
+FRONTAL_DETAIL_DEFINITIONS: dict[str, dict[str, tuple[str, ...] | str]] = {
+    "FRONTAL_FIXED_WALL_MODE": {
+        "label": "정면 고정벽",
+        "families": ("FRONTAL_FIXED_BARRIER",),
+        "categories": (
+            "FMVSS208_56K_FIXED_WALL",
+            "FRONTAL_FIXED_BARRIER_NCAP_35MPH",
+            "FRONTAL_FIXED_BARRIER_RESEARCH_OR_OTHER",
+        ),
+    },
+    "FRONTAL_FIXED_WALL_UNBELTED_MODE": {
+        "label": "정면 고정벽_unbelted",
+        "families": ("FRONTAL_FIXED_BARRIER",),
+        "categories": ("FMVSS208_40K_UNBELTED_FIXED_WALL",),
+    },
+    "FRONTAL_40PCT_OFFSET_ODB_MODE": {
+        "label": "40% 옵셋(ODB)",
+        "families": ("FRONTAL_FIXED_BARRIER",),
+        "categories": ("FMVSS208_40PCT_OFFSET_ODB",),
+    },
+    "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED_MODE": {
+        "label": "30도 경사_unbelted",
+        "families": ("FRONTAL_FIXED_BARRIER",),
+        "categories": ("FMVSS208_30DEG_ANGLED_FIXED_WALL",),
+    },
+    "FRONTAL_OBLIQUE_RMDB_MODE": {
+        "label": "OBLIQUE/RMDB",
+        "families": ("FRONTAL_OBLIQUE_RMDB", "FRONTAL_OBLIQUE_RMDB_EDGE"),
+        "categories": (),
+    },
+    "FRONTAL_OFFSET_VTV_RESEARCH_MODE": {
+        "label": "VTV 옵셋 연구",
+        "families": ("FRONTAL_OFFSET",),
+        "categories": ("FRONTAL_OFFSET_VTV_15DEG_50PCT_RESEARCH_NON_FMVSS208",),
+    },
+}
+
+SIDE_DETAIL_DEFINITIONS: dict[str, dict[str, tuple[str, ...] | str]] = {
+    "SIDE_MDB_NCAP_38_5MPH_MODE": {
+        "label": "MDB_NCAP",
+        "families": ("SIDE_MDB",),
+        "categories": ("SIDE_MDB_NCAP_38_5MPH",),
+    },
+    "SIDE_MDB_FMVSS214_MODE": {
+        "label": "MDB_FMVSS214",
+        "families": ("SIDE_MDB",),
+        "categories": ("SIDE_MDB_FMVSS214",),
+    },
+    "SIDE_MDB_RESEARCH_OR_OTHER_MODE": {
+        "label": "MDB_research",
+        "families": ("SIDE_MDB",),
+        "categories": ("SIDE_MDB_RESEARCH_OR_OTHER",),
+    },
+    "SIDE_POLE_MODE": {
+        "label": "POLE",
+        "families": ("SIDE_POLE",),
+        "categories": (
+            "SIDE_POLE_NCAP_75DEG_20MPH",
+            "SIDE_POLE_FMVSS214",
+            "SIDE_POLE_FMVSS214_MISCoded_VTB",
+        ),
+    },
+    "SIDE_POLE_RESEARCH_OR_OTHER_MODE": {
+        "label": "POLE_research",
+        "families": ("SIDE_POLE",),
+        "categories": ("SIDE_POLE_RESEARCH_OR_OTHER",),
+    },
+}
+
+REAR_DETAIL_DEFINITIONS: dict[str, dict[str, tuple[str, ...] | str]] = {
+    "REAR_IMPACT_FMVSS301_MODE": {
+        "label": "후방 FMVSS301",
+        "families": ("REAR_IMPACT",),
+        "categories": ("REAR_IMPACT_FMVSS301",),
+    },
+    "REAR_IMPACT_RESEARCH_VTV_OR_ITV_MODE": {
+        "label": "후방 Research/VTV/ITV",
+        "families": ("REAR_IMPACT",),
+        "categories": ("REAR_IMPACT_RESEARCH_VTV_OR_ITV",),
+    },
+}
+
+DETAIL_DEFINITIONS_BY_GROUP: dict[str, dict[str, dict[str, tuple[str, ...] | str]]] = {
+    "Frontal": FRONTAL_DETAIL_DEFINITIONS,
+    "Side": SIDE_DETAIL_DEFINITIONS,
+    "Rear": REAR_DETAIL_DEFINITIONS,
+}
+DETAIL_DEFINITIONS = {
+    detail: definition
+    for group_definitions in DETAIL_DEFINITIONS_BY_GROUP.values()
+    for detail, definition in group_definitions.items()
+}
+DETAIL_GROUP_BY_VALUE = {
+    detail: group
+    for group, definitions in DETAIL_DEFINITIONS_BY_GROUP.items()
+    for detail in definitions
+}
+DETAIL_ORDER_BY_GROUP = {
+    group: tuple(definitions) for group, definitions in DETAIL_DEFINITIONS_BY_GROUP.items()
+}
+
+FRONTAL_DETAIL_ALIASES = {
+    "FMVSS208_FIXED_WALL": "FRONTAL_FIXED_WALL_MODE",
+    "FMVSS208_40K_UNBELTED_FIXED_WALL": "FRONTAL_FIXED_WALL_UNBELTED_MODE",
+    "FRONTAL_FIXED_WALL_UNBELTED": "FRONTAL_FIXED_WALL_UNBELTED_MODE",
+    "FMVSS208_40PCT_OFFSET_ODB": "FRONTAL_40PCT_OFFSET_ODB_MODE",
+    "FMVSS208_30DEG_ANGLED_FIXED_WALL": "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED_MODE",
+    "FRONTAL_30DEG_ANGLED_FIXED_WALL_MODE": "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED_MODE",
+    "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED": "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED_MODE",
+    "FRONTAL_OBLIQUE_30DEG": "FRONTAL_OBLIQUE_RMDB_MODE",
+}
+SIDE_DETAIL_ALIASES = {
+    "SIDE_MDB_NCAP": "SIDE_MDB_NCAP_38_5MPH_MODE",
+    "SIDE_MDB_NCAP_38_5MPH": "SIDE_MDB_NCAP_38_5MPH_MODE",
+    "SIDE_MDB_FMVSS214": "SIDE_MDB_FMVSS214_MODE",
+    "SIDE_MDB_RESEARCH_OR_OTHER": "SIDE_MDB_RESEARCH_OR_OTHER_MODE",
+    "SIDE_MDB_RESEARCH": "SIDE_MDB_RESEARCH_OR_OTHER_MODE",
+    "SIDE_POLE_NCAP": "SIDE_POLE_MODE",
+    "SIDE_POLE_NCAP_75DEG_20MPH": "SIDE_POLE_MODE",
+    "SIDE_POLE_NCAP_75DEG_20MPH_MODE": "SIDE_POLE_MODE",
+    "SIDE_POLE_FMVSS214": "SIDE_POLE_MODE",
+    "SIDE_POLE_FMVSS214_MODE": "SIDE_POLE_MODE",
+    "SIDE_POLE_FMVSS214_MISCoded_VTB": "SIDE_POLE_MODE",
+    "SIDE_POLE_RESEARCH_OR_OTHER": "SIDE_POLE_RESEARCH_OR_OTHER_MODE",
+    "SIDE_POLE_RESEARCH": "SIDE_POLE_RESEARCH_OR_OTHER_MODE",
+}
+REAR_DETAIL_ALIASES = {
+    "REAR_IMPACT_FMVSS301": "REAR_IMPACT_FMVSS301_MODE",
+    "REAR_IMPACT_RESEARCH_VTV_OR_ITV": "REAR_IMPACT_RESEARCH_VTV_OR_ITV_MODE",
+}
+DETAIL_ALIASES = {**FRONTAL_DETAIL_ALIASES, **SIDE_DETAIL_ALIASES, **REAR_DETAIL_ALIASES}
+
+CRASH_FAMILY_LABELS = {
+    "FRONTAL_FIXED_WALL_MODE": "정면 고정벽",
+    "FRONTAL_FIXED_WALL_UNBELTED_MODE": "정면 고정벽_unbelted",
+    "FRONTAL_40PCT_OFFSET_ODB_MODE": "40% 옵셋(ODB)",
+    "FRONTAL_30DEG_ANGLED_FIXED_WALL_UNBELTED_MODE": "30도 경사_unbelted",
+    "FRONTAL_OBLIQUE_RMDB_MODE": "OBLIQUE/RMDB",
+    "FRONTAL_OFFSET_VTV_RESEARCH_MODE": "VTV 옵셋 연구",
+    "SIDE_MDB_NCAP_38_5MPH_MODE": "MDB_NCAP",
+    "SIDE_MDB_FMVSS214_MODE": "MDB_FMVSS214",
+    "SIDE_MDB_RESEARCH_OR_OTHER_MODE": "MDB_research",
+    "SIDE_POLE_MODE": "POLE",
+    "SIDE_POLE_RESEARCH_OR_OTHER_MODE": "POLE_research",
+    "REAR_IMPACT_FMVSS301_MODE": "후방 FMVSS301",
+    "REAR_IMPACT_RESEARCH_VTV_OR_ITV_MODE": "후방 Research/VTV/ITV",
+    "FRONTAL_FIXED_BARRIER": "정면 고정벽 family",
+    "FRONTAL_OFFSET": "VTV 옵셋 연구",
+    "FRONTAL_OBLIQUE_RMDB": "OBLIQUE/RMDB",
+    "FRONTAL_OBLIQUE_RMDB_EDGE": "OBLIQUE/RMDB edge",
+    "SIDE_MDB": "측면 MDB family",
+    "SIDE_POLE": "측면 Pole family",
+    "REAR_IMPACT": "후방 충돌 family",
+}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -71,6 +266,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         vehicle_make: str | None = None,
         asset_kind: str | None = None,
         test_family: str | None = None,
+        test_family_group: str | None = None,
         test_configuration_key: str | None = None,
         metadata_flag: str | None = None,
         limit: int = 5000,
@@ -84,6 +280,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 vehicle_make=vehicle_make,
                 asset_kind=asset_kind,
                 test_family=test_family,
+                test_family_group=test_family_group,
                 test_configuration_key=test_configuration_key,
                 metadata_flag=metadata_flag,
             )
@@ -163,6 +360,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "media_assets": [_asset_out(asset) for asset in assets],
                     "scenario_trajectory": final_payload["scenario_trajectory"],
                     "open5_recommendations": final_payload["open5_recommendations"],
+                    "safety_rating_match": safety_rating_match_for_test(engine, test_no),
                 }
                 if include_raw:
                     payload["raw_payload_note"] = "Raw payload endpoint is intentionally separated."
@@ -181,13 +379,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "test_classification": _classification_out(legacy_classification),
             "test_participants": [_participant_out(participant) for participant in participants],
             "media_assets": [_asset_out(asset) for asset in assets],
+            "safety_rating_match": safety_rating_match_for_test(engine, test_no),
         }
         if include_raw:
             payload["raw_payload_note"] = "Raw payload endpoint is intentionally separated."
         return payload
 
     @app.get("/api/filter-options")
-    def filter_options() -> dict[str, list[dict[str, object]]]:
+    def filter_options() -> dict[str, object]:
         if _metadata_refresh_v10_available(engine):
             with engine.connect() as connection:
                 rows = connection.execute(
@@ -202,16 +401,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     options.setdefault(str(row["facet_name"]), []).append(
                         {"value": row["facet_value"], "test_count": row["test_count"]}
                     )
-                return options
+                return _with_crash_family_group_options(options)
 
         with session_factory() as session:
             facets = list(session.scalars(select(TestFacet).order_by(TestFacet.facet_name)))
-        options = {}
+        fallback_options: dict[str, list[dict[str, object]]] = {}
         for facet in facets:
-            options.setdefault(facet.facet_name, []).append(
+            fallback_options.setdefault(facet.facet_name, []).append(
                 {"value": facet.facet_value, "test_count": facet.test_count}
             )
-        return options
+        return _with_crash_family_group_options(fallback_options)
 
     @app.get("/api/metadata-refresh/v10/summary")
     def metadata_refresh_summary() -> dict[str, object]:
@@ -267,6 +466,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return {"available": True, "test_no": test_no, "found": False}
         return {"available": True, "found": True, **detail}
 
+    @app.get("/api/safety-ratings/summary")
+    def safety_ratings_summary() -> dict[str, object]:
+        return safety_rating_overlay_summary(engine)
+
+    @app.get("/api/safety-ratings/tests/{test_no}")
+    def safety_ratings_test_match(test_no: int) -> dict[str, object]:
+        return safety_rating_match_for_test(engine, test_no)
+
     @app.get("/api/coverage/fields")
     def coverage_fields() -> dict[str, object]:
         with session_factory() as session:
@@ -315,6 +522,7 @@ def _final_test_summaries(
     vehicle_make: str | None,
     asset_kind: str | None,
     test_family: str | None,
+    test_family_group: str | None,
     test_configuration_key: str | None,
     metadata_flag: str | None,
 ) -> list[dict[str, object]]:
@@ -338,7 +546,21 @@ def _final_test_summaries(
     if asset_kind:
         items = [item for item in items if _contains(item, "asset_kinds", asset_kind)]
     if test_family:
-        items = [item for item in items if item.get("test_family") == test_family]
+        detail = _detail_definition(test_family)
+        family_values = _family_values_for_selection(test_family)
+        if detail and _detail_categories(detail):
+            category_values = set(_detail_categories(detail))
+            items = [
+                item
+                for item in items
+                if item.get("test_family") in family_values
+                and item.get("official_category") in category_values
+            ]
+        else:
+            items = [item for item in items if item.get("test_family") in family_values]
+    if test_family_group:
+        normalized_group = _normalize_crash_family_group(test_family_group)
+        items = [item for item in items if item.get("test_family_group") == normalized_group]
     if test_configuration_key:
         items = [
             item
@@ -350,7 +572,7 @@ def _final_test_summaries(
             item
             for item in items
             if isinstance(item.get("metadata_flags"), list)
-            and metadata_flag in item["metadata_flags"]
+            and metadata_flag in cast(list[object], item["metadata_flags"])
         ]
     return items
 
@@ -406,7 +628,7 @@ def _summary_out(summary: TestFilterSummary) -> dict[str, object]:
     }
 
 
-def _final_summary_out(row: Mapping[str, Any]) -> dict[str, object]:
+def _final_summary_out(row: Mapping[Any, Any]) -> dict[str, object]:
     flags = _metadata_flags(row)
     return {
         "test_no": row["test_no"],
@@ -424,7 +646,11 @@ def _final_summary_out(row: Mapping[str, Any]) -> dict[str, object]:
         "offset_distance": _float_or_none(row["offset_distance"]),
         "model_year_min": row["model_year_min"],
         "model_year_max": row["model_year_max"],
+        "test_family_group": _family_group_for_family(row["official_family"]),
         "test_family": row["official_family"],
+        "test_family_label": _candidate_crash_family_label(
+            row["official_family"], row["official_category"]
+        ),
         "official_category": row["official_category"],
         "official_mode": row["official_mode"],
         "official_evidence_confidence": row["official_evidence_confidence"],
@@ -433,7 +659,7 @@ def _final_summary_out(row: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
-def _final_test_out(row: Mapping[str, Any]) -> dict[str, object]:
+def _final_test_out(row: Mapping[Any, Any]) -> dict[str, object]:
     return {
         "test_no": row["test_no"],
         "test_reference_no": row["test_reference_no"],
@@ -458,7 +684,7 @@ def _final_test_out(row: Mapping[str, Any]) -> dict[str, object]:
     }
 
 
-def _metadata_refresh_out(row: Mapping[str, Any]) -> dict[str, object]:
+def _metadata_refresh_out(row: Mapping[Any, Any]) -> dict[str, object]:
     return {
         "status": row["metadata_refresh_status"],
         "finalized_at": row["metadata_refresh_finalized_at"],
@@ -485,7 +711,9 @@ def _final_classification_out(classification: RowMapping | None) -> dict[str, ob
         "impact_angle": _float_or_none(classification["impact_angle"]),
         "impact_direction": classification["impact_direction"],
         "counterparty_kind": classification["counterparty_kind"],
+        "test_family_group": _family_group_for_family(classification["test_family"]),
         "test_family": classification["test_family"],
+        "test_family_label": _crash_family_label(classification["test_family"]),
         "official_category": classification["official_category"],
         "official_mode": classification["official_mode"],
         "official_evidence_confidence": classification["official_evidence_confidence"],
@@ -509,7 +737,9 @@ def _classification_out(classification: TestClassification | None) -> dict[str, 
         "impact_angle": _float_or_none(classification.impact_angle),
         "impact_direction": classification.impact_direction,
         "counterparty_kind": classification.counterparty_kind,
+        "test_family_group": _family_group_for_family(classification.test_family),
         "test_family": classification.test_family,
+        "test_family_label": _crash_family_label(classification.test_family),
         "classification_status": classification.classification_status,
     }
 
@@ -544,6 +774,250 @@ def _asset_out(asset: MediaAsset) -> dict[str, object]:
 def _contains(item: dict[str, object], key: str, value: str) -> bool:
     candidate = item.get(key)
     return isinstance(candidate, list) and value in candidate
+
+
+def _int_value(value: object) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (str, bytes, float)):
+        return int(value)
+    return 0
+
+
+def _with_crash_family_group_options(
+    options: dict[str, list[dict[str, object]]],
+) -> dict[str, object]:
+    result: dict[str, object] = dict(options)
+    family_key = "official_family" if "official_family" in options else "test_family"
+    family_options = options.get(family_key, [])
+    category_counts = {
+        str(option.get("value") or ""): _int_value(option.get("test_count"))
+        for option in options.get("official_category", [])
+        if str(option.get("value") or "").strip()
+    }
+    group_counts: dict[str, int] = {}
+    group_families: dict[str, list[dict[str, object]]] = {}
+    family_counts: dict[str, int] = {}
+    for option in family_options:
+        family = str(option.get("value") or "")
+        group = _family_group_for_family(family)
+        if not group:
+            continue
+        count = _int_value(option.get("test_count"))
+        family_counts[family] = count
+        group_counts[group] = group_counts.get(group, 0) + count
+        group_families.setdefault(group, []).append(
+            {"value": family, "label": _crash_family_label(family), "test_count": count}
+        )
+    if not group_counts:
+        return result
+    grouped = [
+        {"value": group, "test_count": group_counts[group]}
+        for group in CRASH_FAMILY_GROUP_ORDER
+        if group in group_counts
+    ]
+    grouped.extend(
+        {"value": group, "test_count": count}
+        for group, count in sorted(group_counts.items())
+        if group not in CRASH_FAMILY_GROUP_ORDER
+    )
+    by_group = [
+        {"value": group, "test_count": group_counts[group], "families": group_families[group]}
+        for group in CRASH_FAMILY_GROUP_ORDER
+        if group in group_counts
+    ]
+    detail_by_group = _family_detail_options_by_group(
+        group_families, family_counts, category_counts
+    )
+    labels = _crash_family_labels(list(family_counts))
+    result["test_family_group"] = grouped
+    result["test_family_by_group"] = by_group
+    result["test_family_detail_by_group"] = detail_by_group
+    result["test_family_labels"] = labels
+    if family_key == "official_family":
+        result["official_family_group"] = grouped
+        result["official_family_by_group"] = by_group
+        result["official_family_detail_by_group"] = detail_by_group
+        result["official_family_labels"] = labels
+    return result
+
+
+def _family_detail_options_by_group(
+    group_families: dict[str, list[dict[str, object]]],
+    family_counts: dict[str, int],
+    category_counts: dict[str, int],
+) -> list[dict[str, object]]:
+    detail_groups: list[dict[str, object]] = []
+    available = set(family_counts)
+    for group in CRASH_FAMILY_GROUP_ORDER:
+        if group not in group_families:
+            continue
+        if group in DETAIL_DEFINITIONS_BY_GROUP:
+            details = []
+            for detail in DETAIL_ORDER_BY_GROUP[group]:
+                definition = DETAIL_DEFINITIONS[detail]
+                families = [
+                    family for family in _detail_families(definition) if family in available
+                ]
+                if not families:
+                    continue
+                categories = list(_detail_categories(definition))
+                category_total = sum(category_counts.get(category, 0) for category in categories)
+                if categories and category_counts and category_total == 0:
+                    continue
+                test_count = (
+                    category_total
+                    if categories
+                    else sum(family_counts[family] for family in families)
+                )
+                details.append(
+                    {
+                        "value": detail,
+                        "label": _crash_family_label(detail),
+                        "test_count": test_count,
+                        "families": families,
+                        "categories": categories,
+                    }
+                )
+        else:
+            details = [
+                {
+                    "value": str(family["value"]),
+                    "label": str(family.get("label") or family["value"]),
+                    "test_count": _int_value(family.get("test_count")),
+                    "families": [str(family["value"])],
+                }
+                for family in group_families[group]
+            ]
+        detail_groups.append(
+            {
+                "value": group,
+                "test_count": sum(_int_value(item["test_count"]) for item in details),
+                "details": details,
+            }
+        )
+    return detail_groups
+
+
+def _crash_family_labels(families: list[str]) -> dict[str, str]:
+    labels = {family: _crash_family_label(family) for family in families}
+    for detail, definition in DETAIL_DEFINITIONS.items():
+        if any(member in families for member in _detail_families(definition)):
+            labels[detail] = _crash_family_label(detail)
+    return labels
+
+
+def _crash_family_label(family: object) -> str:
+    key = _family_key(family)
+    return CRASH_FAMILY_LABELS.get(key, str(family or "").strip())
+
+
+def _candidate_crash_family_label(family: object, official_category: object) -> str:
+    category_key = _family_key(official_category)
+    for detail, definition in DETAIL_DEFINITIONS.items():
+        if category_key in _detail_categories(definition):
+            return _crash_family_label(detail)
+    return _crash_family_label(family)
+
+
+def _family_group_for_family(value: object) -> str:
+    official_key = _family_key(value)
+    if not official_key:
+        return ""
+    legacy_aliases = {
+        "FRONTAL": "Frontal",
+        "FRONT": "Frontal",
+        "FRONTAL_BARRIER": "Frontal",
+        "SIDE": "Side",
+        "SIDE_POLE": "Side",
+        "SIDEPOLE": "Side",
+        "POLE": "Side",
+    }
+    if official_key in legacy_aliases:
+        return legacy_aliases[official_key]
+    if official_key in DETAIL_DEFINITIONS:
+        return DETAIL_GROUP_BY_VALUE.get(official_key, "")
+    if official_key in DETAIL_ALIASES:
+        return DETAIL_GROUP_BY_VALUE.get(DETAIL_ALIASES[official_key], "")
+    return CRASH_FAMILY_TO_GROUP.get(official_key, "")
+
+
+def _detail_definition(value: object) -> dict[str, tuple[str, ...] | str] | None:
+    key = _family_key(value)
+    canonical = DETAIL_ALIASES.get(key, key)
+    return DETAIL_DEFINITIONS.get(canonical)
+
+
+def _detail_families(definition: dict[str, tuple[str, ...] | str]) -> tuple[str, ...]:
+    values = definition.get("families", ())
+    return tuple(str(value) for value in values) if not isinstance(values, str) else (values,)
+
+
+def _detail_categories(definition: dict[str, tuple[str, ...] | str]) -> tuple[str, ...]:
+    values = definition.get("categories", ())
+    return tuple(str(value) for value in values) if not isinstance(values, str) else (values,)
+
+
+def _family_key(value: object) -> str:
+    return "_".join(
+        part
+        for part in str(value or "")
+        .strip()
+        .upper()
+        .replace("-", "_")
+        .replace(" ", "_")
+        .split("_")
+        if part
+    )
+
+
+def _family_values_for_selection(family: str) -> list[str]:
+    detail = _detail_definition(family)
+    if detail:
+        return list(_detail_families(detail))
+    return [_family_key(family)]
+
+
+def _normalize_crash_family_group(value: object) -> str:
+    text_value = str(value or "").strip()
+    if not text_value:
+        return ""
+    normalized = text_value.lower().replace("-", "_").replace("/", "_").replace(" ", "_")
+    normalized = "_".join(part for part in normalized.split("_") if part)
+    aliases = {
+        "front": "Frontal",
+        "frontal": "Frontal",
+        "side": "Side",
+        "rear": "Rear",
+        "rear_impact": "Rear",
+        "rollover": "Rollover",
+        "adas": "ADAS",
+        "ped": "PED",
+        "pedestrian": "PED",
+        "ejm": "EJM",
+        "ejection_mitigation": "EJM",
+        "child": "Child Restraint",
+        "child_restraint": "Child Restraint",
+        "airbag": "Airbag / Occupant Protection",
+        "airbag_deployment": "Airbag / Occupant Protection",
+        "occupant_protection": "Airbag / Occupant Protection",
+        "interior": "Interior Fitting",
+        "interior_fitting": "Interior Fitting",
+        "sled": "Sled / Research",
+        "sled_research": "Sled / Research",
+        "bumper": "Bumper / Damageability",
+        "bumper_damageability": "Bumper / Damageability",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    for group in CRASH_FAMILY_GROUP_ORDER:
+        group_key = group.lower().replace("/", "_").replace(" ", "_")
+        group_key = "_".join(part for part in group_key.split("_") if part)
+        if normalized == group_key:
+            return group
+    return ""
 
 
 def _json_list(value: Any) -> list[object]:
@@ -602,7 +1076,7 @@ def _parse_metric_value(value: object) -> object:
             return value
 
 
-def _jsonable_mapping(row: Mapping[str, Any]) -> dict[str, object]:
+def _jsonable_mapping(row: Mapping[Any, Any]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in row.items():
         if hasattr(value, "isoformat"):
@@ -754,11 +1228,26 @@ def _metadata_refresh_html() -> str:
       <div class="actions">
         <a class="button primary" href="/api/metadata-refresh/v10/summary">Summary JSON</a>
         <a class="button" href="/api/filter-options">Facet options</a>
+        <a class="button" href="/api/safety-ratings/summary">SafetyRatings overlay</a>
         <a class="button" href="/docs">Swagger docs</a>
       </div>
     </section>
 
     <section class="grid metrics" id="metrics"></section>
+
+    <section class="section" id="ratingOverlay">
+      <div class="section-head">
+        <div>
+          <h2>NHTSA SafetyRatings overlay</h2>
+          <div class="muted">
+            NHTSA 공식 API 흐름은 year/make/model → vehicle variants → selected VehicleId입니다.
+            복수 VehicleId 후보는 오류가 아니라 variant 선택 단계로 노출합니다.
+          </div>
+        </div>
+        <a class="button" href="/api/safety-ratings/summary">Rating JSON</a>
+      </div>
+      <div class="grid cards" id="ratingCards"></div>
+    </section>
 
     <section class="section">
       <div class="section-head">
@@ -850,15 +1339,24 @@ def _metadata_refresh_html() -> str:
         <div class="muted">tests: ${tests || 'none'}</div>
       </a>`;
     }
+    function ratingCard(title, value, note) {
+      return `<article class="card">
+        <strong>${title}</strong>
+        <div class="mono">${value}</div>
+        <div class="muted">${note}</div>
+      </article>`;
+    }
     async function loadDashboard() {
-      const [summaryRes, liveRes, conflictRes] = await Promise.all([
+      const [summaryRes, liveRes, conflictRes, ratingRes] = await Promise.all([
         fetch('/api/metadata-refresh/v10/summary'),
         fetch('/api/tests?metadata_flag=live_summary_missing_v10'),
         fetch('/api/tests?metadata_flag=source_semantics_conflict_v10'),
+        fetch('/api/safety-ratings/summary'),
       ]);
       const summary = await summaryRes.json();
       const live = await liveRes.json();
       const conflict = await conflictRes.json();
+      const rating = await ratingRes.json();
       if (!summary.available) {
         document.getElementById('runtime').textContent = 'v10 objects unavailable';
         document.getElementById('runtime').className = 'error';
@@ -868,6 +1366,36 @@ def _metadata_refresh_html() -> str:
       document.getElementById('metrics').innerHTML = metricSpec
         .map(([key, label, note]) => metricCard(summary.metrics, key, label, note))
         .join('');
+      if (rating.available) {
+        document.getElementById('ratingCards').innerHTML = [
+          ratingCard(
+            'matched subjects',
+            fmt.format(rating.metrics.matched_subject_rows || 0),
+            'subject vehicle rows with at least one VehicleId candidate',
+          ),
+          ratingCard(
+            'candidate rows',
+            fmt.format(rating.metrics.candidate_rows || 0),
+            'all retained NHTSA VehicleId variants',
+          ),
+          ratingCard(
+            'review required',
+            fmt.format(rating.metrics.review_subject_rows || 0),
+            'ambiguous variants that should not be auto-selected',
+          ),
+          ratingCard(
+            'official handling',
+            rating.official_handling.variant_query,
+            rating.official_handling.selection_rule,
+          ),
+        ].join('');
+      } else {
+        document.getElementById('ratingCards').innerHTML = ratingCard(
+          'overlay unavailable',
+          rating.reason || 'not installed',
+          'Run the rating candidate builder/importer to create the read-only overlay tables.',
+        );
+      }
       document.getElementById('flagCards').innerHTML = [
         flagCard(
           'live_summary_missing_v10',

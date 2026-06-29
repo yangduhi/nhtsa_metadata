@@ -63,7 +63,7 @@ bounded manifest seed. It is not the source of truth for canonical metadata.
 After user approval on 2026-06-28, the local `.env` may point at the finalized 2011+ DB:
 
 ```text
-NHTSA_METADATA_DATABASE_URL=sqlite:///D:/vscode/nhtsa_metadata/data/full_2011plus_metadata_filter_ready_2026-05-04.sqlite
+NHTSA_METADATA_DATABASE_URL=sqlite:///D:/vscode/nhtsa_metadata/data/nhtsa_test_metadata_2011.sqlite
 NHTSA_METADATA_ALLOW_LIVE=true
 ```
 
