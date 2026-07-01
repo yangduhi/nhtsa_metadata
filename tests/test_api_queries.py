@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect, text
 
 from nhtsa_metadata.api.app import _with_crash_family_group_options, create_app
 from nhtsa_metadata.config import Settings
@@ -15,6 +16,237 @@ from nhtsa_metadata.services.safety_ratings_overlay import (
     ensure_safety_rating_overlay_schema,
     upsert_safety_rating_overlay_rows,
 )
+
+
+def test_safety_rating_overlay_schema_upgrades_legacy_table_with_official_rollover_fields(
+    tmp_settings: Settings,
+) -> None:
+    engine = create_engine_for_settings(tmp_settings)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE nhtsa_rating_match_candidates ("
+                "row_key TEXT NOT NULL, "
+                "test_no INTEGER NOT NULL, "
+                "rating_vehicle_id INTEGER NOT NULL, "
+                "candidate_rank INTEGER NOT NULL, "
+                "generated_at TEXT NOT NULL, "
+                "rollover_rating TEXT, "
+                "PRIMARY KEY (row_key, rating_vehicle_id)"
+                ")"
+            )
+        )
+
+    ensure_safety_rating_overlay_schema(engine)
+
+    columns = {
+        column["name"] for column in inspect(engine).get_columns("nhtsa_rating_match_candidates")
+    }
+    assert {
+        "static_stability_factor",
+        "rollover_possibility",
+        "dynamic_tip_result",
+        "rollover_stars",
+        "roll_safety_concern",
+        "roll_foot_notes",
+        "safercar_source_file",
+        "safercar_source_sha256",
+    }.issubset(columns)
+
+
+def test_safety_rating_overlay_outputs_official_rollover_import_layer(
+    tmp_settings: Settings,
+) -> None:
+    engine = create_engine_for_settings(tmp_settings)
+    upsert_safety_rating_overlay_rows(
+        engine,
+        [
+            {
+                "row_key": "9100::1",
+                "test_no": 9100,
+                "source_vehicle_no": 1,
+                "db_make": "TOYOTA",
+                "db_model": "RAV4",
+                "db_model_year": 2019,
+                "match_method": "direct",
+                "match_confidence": "HIGH_SINGLE_VARIANT",
+                "query_make": "TOYOTA",
+                "query_model": "RAV4",
+                "variant_count": 1,
+                "candidate_rank": 1,
+                "candidate_score": 50,
+                "rating_vehicle_id": 14082,
+                "rating_vehicle_description": "2019 Toyota RAV4 SUV AWD",
+                "RolloverRating": "4",
+                "RolloverPossibility": "0.155",
+                "dynamicTipResult": "No Tip",
+                "STATIC_STABI_FACTOR": "1.27",
+                "TIP": "No Tip",
+                "ROLLOVER_STARS": "4",
+                "ROLL_SAFETY_CONCERN": "None",
+                "ROLL_FOOT_NOTES": "Imported from Safercar fixture",
+                "safercar_source_file": "Safercar_data.csv",
+                "safercar_source_sha256": "abc123",
+            }
+        ],
+        generated_at="2026-06-30T00:00:00+00:00",
+    )
+
+    client = TestClient(create_app(tmp_settings))
+    top_candidate = client.get("/api/safety-ratings/tests/9100").json()["subjects"][0][
+        "top_candidate"
+    ]
+
+    assert top_candidate["official_rollover"] == {
+        "authority": "nhtsa_safety_ratings_api_and_safercar_csv_import",
+        "rating": "4",
+        "possibility": "0.155",
+        "dynamic_tip_result": "No Tip",
+        "static_stability_factor": "1.27",
+        "rollover_stars": "4",
+        "safety_concern": "None",
+        "foot_notes": "Imported from Safercar fixture",
+        "source_file": "Safercar_data.csv",
+        "source_sha256": "abc123",
+    }
+
+
+
+def test_safety_rating_overlay_normalizes_not_rated_rollover_placeholders(
+    tmp_settings: Settings,
+) -> None:
+    engine = create_engine_for_settings(tmp_settings)
+    upsert_safety_rating_overlay_rows(
+        engine,
+        [
+            {
+                "row_key": "9102::1",
+                "test_no": 9102,
+                "source_vehicle_no": 1,
+                "db_make": "TOYOTA",
+                "db_model": "YARIS",
+                "db_model_year": 2010,
+                "match_method": "fixture",
+                "match_confidence": "HIGH_SINGLE_VARIANT",
+                "query_make": "TOYOTA",
+                "query_model": "YARIS",
+                "variant_count": 1,
+                "candidate_rank": 1,
+                "candidate_score": 50,
+                "rating_vehicle_id": 5794,
+                "rating_vehicle_description": "2010 Toyota Yaris 4-DR. w/SAB",
+                "OverallRating": "Not Rated",
+                "FrontCrashPassengersideRating": "0",
+                "RolloverRating": "Not Rated",
+                "RolloverPossibility": "0.0",
+                "dynamicTipResult": "N",
+                "STATIC_STABI_FACTOR": "0",
+                "TIP": "N",
+                "ROLLOVER_STARS": "Not Rated",
+                "safercar_source_file": "Safercar_data.csv",
+                "safercar_source_sha256": "abc123",
+            }
+        ],
+        generated_at="2026-06-30T00:00:00+00:00",
+    )
+
+    client = TestClient(create_app(tmp_settings))
+    top_candidate = client.get("/api/safety-ratings/tests/9102").json()["subjects"][0][
+        "top_candidate"
+    ]
+
+    assert top_candidate["OverallRating"] == "Not Rated"
+    assert top_candidate["FrontCrashPassengersideRating"] == "Not Rated"
+    assert top_candidate["RolloverPossibility"] is None
+    assert top_candidate["dynamicTipResult"] is None
+    assert top_candidate["official_rollover"] == {
+        "authority": "nhtsa_safety_ratings_api_and_safercar_csv_import",
+        "rating": "Not Rated",
+        "possibility": None,
+        "dynamic_tip_result": None,
+        "static_stability_factor": None,
+        "rollover_stars": "Not Rated",
+        "safety_concern": None,
+        "foot_notes": None,
+        "source_file": "Safercar_data.csv",
+        "source_sha256": "abc123",
+    }
+
+
+def test_safety_rating_overlay_exposes_safercar_reference_and_injury_payloads(
+    tmp_settings: Settings,
+) -> None:
+    engine = create_engine_for_settings(tmp_settings)
+    upsert_safety_rating_overlay_rows(
+        engine,
+        [
+            {
+                "row_key": "9101::1",
+                "test_no": 9101,
+                "source_vehicle_no": 1,
+                "db_make": "TOYOTA",
+                "db_model": "RAV4",
+                "db_model_year": 2019,
+                "match_method": "fixture",
+                "match_confidence": "HIGH_DISAMBIGUATED",
+                "query_make": "TOYOTA",
+                "query_model": "RAV4",
+                "variant_count": 1,
+                "candidate_rank": 1,
+                "candidate_score": 50,
+                "rating_vehicle_id": 14082,
+                "rating_vehicle_description": "2019 Toyota RAV4 SUV AWD",
+                "OverallRating": "5",
+                "safercar_authority_source_sha256": "abc123",
+                "safercar_authority_fields": "overall_rating",
+                "safercar_test_reference_payload_json": (
+                    '{"FRNT_TEST_NO":"10704","FRNT_VIN":"JTMG1RFV0KD007450",'
+                    '"SIDE_TEST_NO":"10708","SIDE_TESTED_WITH":"CURTAIN AIR BAG"}'
+                ),
+                "safercar_injury_metric_payload_json": (
+                    '{"HIC15_DRIV":"172.50700","CHEST_DEFL_DRIV":"19.32800"}'
+                ),
+            }
+        ],
+        generated_at="2026-06-30T00:00:00+00:00",
+    )
+
+    client = TestClient(create_app(tmp_settings))
+    authority = client.get("/api/safety-ratings/tests/9101").json()["subjects"][0][
+        "top_candidate"
+    ]["safercar_authority"]
+
+    assert authority["test_reference_payload"] == {
+        "FRNT_TEST_NO": "10704",
+        "FRNT_VIN": "JTMG1RFV0KD007450",
+        "SIDE_TEST_NO": "10708",
+        "SIDE_TESTED_WITH": "CURTAIN AIR BAG",
+    }
+    assert authority["test_reference_bridge"] == {
+        "role": "official_safercar_rating_provenance",
+        "download_prefill_test_numbers": ["10704", "10708"],
+        "component_tests": [
+            {
+                "component": "frontal",
+                "test_no": "10704",
+                "vin": "JTMG1RFV0KD007450",
+                "tested_with": "",
+            },
+            {
+                "component": "side",
+                "test_no": "10708",
+                "vin": "",
+                "tested_with": "CURTAIN AIR BAG",
+            },
+        ],
+        "explainer": (
+            "Official Safercar rating references frontal test #10704 and side test #10708."
+        ),
+    }
+    assert authority["injury_metric_payload"] == {
+        "CHEST_DEFL_DRIV": "19.32800",
+        "HIC15_DRIV": "172.50700",
+    }
 
 
 def _seed(settings: Settings) -> None:

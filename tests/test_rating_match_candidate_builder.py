@@ -184,3 +184,185 @@ def test_confidence_promotes_identical_top_rating_group_only() -> None:
         )
         == "HIGH_TOP_EQUIVALENT_RATING"
     )
+
+
+def test_safercar_rollover_index_sniffs_delimiter_and_preserves_official_fields(
+    tmp_path: Path,
+) -> None:
+    safercar_csv = tmp_path / "Safercar_data.csv"
+    safercar_csv.write_text(
+        "MODEL_YR,MAKE,MODEL,STATIC_STABI_FACTOR,TIP,ROLLOVER_POSSIBILITY,"
+        "ROLLOVER_STARS,ROLL_SAFETY_CONCERN,ROLL_FOOT_NOTES\n"
+        "2019,TOYOTA,RAV4,1.27,No Tip,0.155,4,None,fixture note\n",
+        encoding="utf-8",
+    )
+    subject = rating_match_builder.SubjectVehicle(
+        row_key="9100::1",
+        test_no=9100,
+        test_type="NEW CAR ASSESSMENT TEST",
+        test_configuration_key="ROL",
+        test_title="",
+        source_vehicle_no=1,
+        make="Toyota",
+        model="RAV4",
+        model_year=2019,
+        body_type="SUV",
+        body_style="SUV",
+        vin=None,
+        curb_weight=None,
+        vehicle_test_weight=None,
+        wheelbase=None,
+        vehicle_length=None,
+        vehicle_width=None,
+        transmission_type=None,
+    )
+
+    index = rating_match_builder.load_safercar_rollover_index(safercar_csv)
+    fields = index.lookup(
+        subject,
+        rating_vehicle_id=14082,
+        rating_vehicle_description="2019 Toyota RAV4 SUV AWD",
+    )
+
+    assert fields == {
+        "STATIC_STABI_FACTOR": "1.27",
+        "TIP": "No Tip",
+        "ROLLOVER_POSSIBILITY": "0.155",
+        "ROLLOVER_STARS": "4",
+        "ROLL_SAFETY_CONCERN": "None",
+        "ROLL_FOOT_NOTES": "fixture note",
+        "safercar_source_file": str(safercar_csv),
+        "safercar_source_sha256": rating_match_builder.sha256_file(safercar_csv),
+        "safercar_source_row_index": "1",
+    }
+
+
+def test_safercar_rollover_index_prefers_drive_train_variant_from_rating_description(
+    tmp_path: Path,
+) -> None:
+    safercar_csv = tmp_path / "Safercar_data.csv"
+    safercar_csv.write_text(
+        "MODEL_YR,MAKE,MODEL,DRIVE_TRAIN,STATIC_STABI_FACTOR,TIP,"
+        "ROLLOVER_POSSIBILITY,ROLLOVER_STARS,ROLL_SAFETY_CONCERN,ROLL_FOOT_NOTES\n"
+        "2019,TOYOTA,RAV4,FWD,1.19,No Tip,0.170,4,,fwd note\n"
+        "2019,TOYOTA,RAV4,AWD,1.27,No Tip,0.155,4,,awd note\n",
+        encoding="utf-8",
+    )
+    subject = rating_match_builder.SubjectVehicle(
+        row_key="9100::1",
+        test_no=9100,
+        test_type="NEW CAR ASSESSMENT TEST",
+        test_configuration_key="ROL",
+        test_title="",
+        source_vehicle_no=1,
+        make="Toyota",
+        model="RAV4",
+        model_year=2019,
+        body_type="SUV",
+        body_style="SUV",
+        vin=None,
+        curb_weight=None,
+        vehicle_test_weight=None,
+        wheelbase=None,
+        vehicle_length=None,
+        vehicle_width=None,
+        transmission_type=None,
+    )
+
+    index = rating_match_builder.load_safercar_rollover_index(safercar_csv)
+    fields = index.lookup(
+        subject,
+        rating_vehicle_id=14082,
+        rating_vehicle_description="2019 Toyota RAV4 SUV AWD",
+    )
+
+    assert fields["STATIC_STABI_FACTOR"] == "1.27"
+    assert fields["ROLLOVER_POSSIBILITY"] == "0.155"
+    assert fields["ROLL_FOOT_NOTES"] == "awd note"
+
+
+def test_safercar_rollover_index_prefers_production_release_from_rating_description(
+    tmp_path: Path,
+) -> None:
+    safercar_csv = tmp_path / "Safercar_data.csv"
+    safercar_csv.write_text(
+        "MODEL_YR,MAKE,MODEL,DRIVE_TRAIN,PRODUCTION_RELEASE,STATIC_STABI_FACTOR,TIP,"
+        "ROLLOVER_POSSIBILITY,ROLLOVER_STARS,ROLL_SAFETY_CONCERN,ROLL_FOOT_NOTES\n"
+        "2011,HYUNDAI,SONATA,FWD,1,1.43,No Tip,0.100,5,,early note\n"
+        "2011,HYUNDAI,SONATA,FWD,2,1.31,No Tip,0.130,4,,later note\n",
+        encoding="utf-8",
+    )
+    subject = rating_match_builder.SubjectVehicle(
+        row_key="7203::1",
+        test_no=7203,
+        test_type="NEW CAR ASSESSMENT TEST",
+        test_configuration_key="",
+        test_title="",
+        source_vehicle_no=1,
+        make="Hyundai",
+        model="Sonata",
+        model_year=2011,
+        body_type="4 DR",
+        body_style="4 DR",
+        vin=None,
+        curb_weight=None,
+        vehicle_test_weight=None,
+        wheelbase=None,
+        vehicle_length=None,
+        vehicle_width=None,
+        transmission_type=None,
+    )
+
+    index = rating_match_builder.load_safercar_rollover_index(safercar_csv)
+    fields = index.lookup(
+        subject,
+        rating_vehicle_id=111,
+        rating_vehicle_description="2011 Hyundai Sonata 4 DR FWD Later Release",
+    )
+
+    assert fields["STATIC_STABI_FACTOR"] == "1.31"
+    assert fields["ROLLOVER_POSSIBILITY"] == "0.130"
+    assert fields["ROLL_FOOT_NOTES"] == "later note"
+
+
+def test_safercar_rollover_index_repairs_shifted_rollover_columns(tmp_path: Path) -> None:
+    safercar_csv = tmp_path / "Safercar_data.csv"
+    safercar_csv.write_text(
+        "MODEL_YR,MAKE,MODEL,DRIVE_TRAIN,BODY_STYLE,PRODUCTION_RELEASE,"
+        "STATIC_STABI_FACTOR,TIP,ROLLOVER_POSSIBILITY,ROLLOVER_STARS,"
+        "ROLL_SAFETY_CONCERN,ROLL_FOOT_NOTES\n"
+        "2016,FORD,F-150,4x2,PU/CC,1,0.191,1.19,2058.73600,4,No Tip,\n",
+        encoding="utf-8",
+    )
+    subject = rating_match_builder.SubjectVehicle(
+        row_key="9571::1",
+        test_no=9571,
+        test_type="NEW CAR ASSESSMENT TEST",
+        test_configuration_key="",
+        test_title="",
+        source_vehicle_no=1,
+        make="Ford",
+        model="F-150",
+        model_year=2016,
+        body_type="PU/CC",
+        body_style="PU/CC",
+        vin=None,
+        curb_weight=None,
+        vehicle_test_weight=None,
+        wheelbase=None,
+        vehicle_length=None,
+        vehicle_width=None,
+        transmission_type=None,
+    )
+
+    index = rating_match_builder.load_safercar_rollover_index(safercar_csv)
+    fields = index.lookup(
+        subject,
+        rating_vehicle_id=10239,
+        rating_vehicle_description="2016 Ford F-150 Super Crew PU/CC 4x2",
+    )
+
+    assert fields["STATIC_STABI_FACTOR"] == "1.19"
+    assert fields["ROLLOVER_POSSIBILITY"] == "0.191"
+    assert fields["TIP"] == "No Tip"
+    assert fields["ROLL_SAFETY_CONCERN"] == ""

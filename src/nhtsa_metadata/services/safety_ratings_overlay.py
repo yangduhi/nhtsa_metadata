@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
@@ -8,6 +9,11 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine, RowMapping
 
 RATING_CANDIDATE_TABLE = "nhtsa_rating_match_candidates"
+SAFERCAR_REFERENCE_COMPONENTS = (
+    ("frontal", "FRNT"),
+    ("side", "SIDE"),
+    ("pole", "POLE"),
+)
 
 RATING_FIELD_MAP = {
     "OverallRating": "overall_rating",
@@ -23,6 +29,8 @@ RATING_FIELD_MAP = {
     "SidePoleCrashRating": "side_pole_crash_rating",
     "RolloverRating": "rollover_rating",
     "RolloverPossibility": "rollover_possibility",
+    "RolloverRating2": "rollover_rating2",
+    "RolloverPossibility2": "rollover_possibility2",
     "dynamicTipResult": "dynamic_tip_result",
     "NHTSAElectronicStabilityControl": "nhtsa_electronic_stability_control",
     "NHTSAForwardCollisionWarning": "nhtsa_forward_collision_warning",
@@ -30,6 +38,77 @@ RATING_FIELD_MAP = {
     "ComplaintsCount": "complaints_count",
     "RecallsCount": "recalls_count",
     "InvestigationCount": "investigation_count",
+}
+
+STAR_RATING_COLUMNS = {
+    "overall_rating",
+    "overall_front_crash_rating",
+    "front_crash_driver_side_rating",
+    "front_crash_passenger_side_rating",
+    "overall_side_crash_rating",
+    "side_crash_driver_side_rating",
+    "side_crash_passenger_side_rating",
+    "side_barrier_rating_overall",
+    "combined_side_barrier_and_pole_rating_front",
+    "combined_side_barrier_and_pole_rating_rear",
+    "side_pole_crash_rating",
+    "rollover_rating",
+    "rollover_rating2",
+    "rollover_stars",
+}
+
+ROLLOVER_PROBABILITY_COLUMNS = {
+    "rollover_possibility",
+    "rollover_possibility2",
+    "safercar_rollover_possibility",
+}
+
+TIP_RESULT_COLUMNS = {"dynamic_tip_result", "safercar_dynamic_tip_result"}
+
+
+def _normalize_rating_placeholder(column: str, value: Any) -> str | None:
+    text_value = str(value or "").strip()
+    if not text_value:
+        return None
+    upper = text_value.upper()
+    if column in STAR_RATING_COLUMNS and text_value == "0":
+        return "Not Rated"
+    if column in ROLLOVER_PROBABILITY_COLUMNS and text_value in {"0", "0.0"}:
+        return None
+    if column == "static_stability_factor" and text_value in {"0", "0.0"}:
+        return None
+    if column in TIP_RESULT_COLUMNS:
+        if upper in {"0", "N", "NO", "NOT RATED"}:
+            return None
+        if upper in {"TIP", "NO TIP"}:
+            return text_value
+    return text_value
+
+
+SAFERCAR_ROLLOVER_COLUMNS = {
+    "static_stability_factor": "TEXT",
+    "safercar_dynamic_tip_result": "TEXT",
+    "safercar_rollover_possibility": "TEXT",
+    "rollover_stars": "TEXT",
+    "roll_safety_concern": "TEXT",
+    "roll_foot_notes": "TEXT",
+    "safercar_source_file": "TEXT",
+    "safercar_source_sha256": "TEXT",
+    "safercar_source_row_index": "TEXT",
+}
+
+
+SAFERCAR_AUTHORITY_COLUMNS = {
+    "safercar_authority_applied_at": "TEXT",
+    "safercar_authority_source_file": "TEXT",
+    "safercar_authority_source_sha256": "TEXT",
+    "safercar_authority_source_row_index": "TEXT",
+    "safercar_authority_fields": "TEXT",
+    "safercar_authority_overrides_json": "TEXT",
+    "safercar_rating_payload_json": "TEXT",
+    "safercar_feature_payload_json": "TEXT",
+    "safercar_test_reference_payload_json": "TEXT",
+    "safercar_injury_metric_payload_json": "TEXT",
 }
 
 BASE_COLUMNS = {
@@ -80,6 +159,8 @@ OFFICIAL_HANDLING = {
 def ensure_safety_rating_overlay_schema(engine: Engine) -> None:
     column_sql = [f"{name} {ddl}" for name, ddl in BASE_COLUMNS.items()]
     column_sql.extend(f"{db_column} TEXT" for db_column in RATING_FIELD_MAP.values())
+    column_sql.extend(f"{name} {ddl}" for name, ddl in SAFERCAR_ROLLOVER_COLUMNS.items())
+    column_sql.extend(f"{name} {ddl}" for name, ddl in SAFERCAR_AUTHORITY_COLUMNS.items())
     ddl = f"""
     CREATE TABLE IF NOT EXISTS {RATING_CANDIDATE_TABLE} (
         {', '.join(column_sql)},
@@ -88,6 +169,7 @@ def ensure_safety_rating_overlay_schema(engine: Engine) -> None:
     """
     with engine.begin() as connection:
         connection.execute(text(ddl))
+        _ensure_overlay_columns(connection)
         connection.execute(
             text(
                 f"CREATE INDEX IF NOT EXISTS ix_{RATING_CANDIDATE_TABLE}_test_no "
@@ -121,7 +203,12 @@ def upsert_safety_rating_overlay_rows(
 ) -> None:
     ensure_safety_rating_overlay_schema(engine)
     generated = generated_at or datetime.now(UTC).replace(microsecond=0).isoformat()
-    insert_columns = list(BASE_COLUMNS) + list(RATING_FIELD_MAP.values())
+    insert_columns = (
+        list(BASE_COLUMNS)
+        + list(RATING_FIELD_MAP.values())
+        + list(SAFERCAR_ROLLOVER_COLUMNS)
+        + list(SAFERCAR_AUTHORITY_COLUMNS)
+    )
     placeholders = ", ".join(f":{column}" for column in insert_columns)
     update_columns = [
         column for column in insert_columns if column not in {"row_key", "rating_vehicle_id"}
@@ -254,6 +341,40 @@ def _normalize_overlay_row(row: dict[str, Any], generated_at: str) -> dict[str, 
             normalized[column] = row.get(column)
     for api_field, db_column in RATING_FIELD_MAP.items():
         normalized[db_column] = row.get(api_field, row.get(db_column))
+    normalized["static_stability_factor"] = row.get(
+        "STATIC_STABI_FACTOR", row.get("static_stability_factor")
+    )
+    normalized["safercar_dynamic_tip_result"] = row.get(
+        "TIP", row.get("safercar_dynamic_tip_result")
+    )
+    normalized["safercar_rollover_possibility"] = row.get(
+        "ROLLOVER_POSSIBILITY", row.get("safercar_rollover_possibility")
+    )
+    normalized["rollover_stars"] = row.get("ROLLOVER_STARS", row.get("rollover_stars"))
+    normalized["roll_safety_concern"] = row.get(
+        "ROLL_SAFETY_CONCERN", row.get("roll_safety_concern")
+    )
+    normalized["roll_foot_notes"] = row.get("ROLL_FOOT_NOTES", row.get("roll_foot_notes"))
+    normalized["safercar_source_file"] = row.get("safercar_source_file")
+    normalized["safercar_source_sha256"] = row.get("safercar_source_sha256")
+    normalized["safercar_source_row_index"] = row.get("safercar_source_row_index")
+    for column in SAFERCAR_AUTHORITY_COLUMNS:
+        normalized[column] = row.get(column)
+    if not normalized.get("dynamic_tip_result"):
+        normalized["dynamic_tip_result"] = normalized.get("safercar_dynamic_tip_result")
+    if not normalized.get("rollover_possibility"):
+        normalized["rollover_possibility"] = normalized.get("safercar_rollover_possibility")
+    if not normalized.get("rollover_rating"):
+        normalized["rollover_rating"] = normalized.get("rollover_stars")
+    for column in {
+        *RATING_FIELD_MAP.values(),
+        "static_stability_factor",
+        "safercar_dynamic_tip_result",
+        "safercar_rollover_possibility",
+        "rollover_stars",
+    }:
+        if column in normalized:
+            normalized[column] = _normalize_rating_placeholder(column, normalized[column])
     return normalized
 
 
@@ -292,8 +413,155 @@ def _candidate_out(row: RowMapping) -> dict[str, object]:
         "rating_vehicle_description": row["rating_vehicle_description"],
     }
     for api_field, db_column in RATING_FIELD_MAP.items():
-        candidate[api_field] = row[db_column]
+        candidate[api_field] = _normalize_rating_placeholder(
+            db_column, _row_value(row, db_column)
+        )
+    official_rollover = _official_rollover_out(row)
+    if official_rollover:
+        candidate["official_rollover"] = official_rollover
+    safercar_authority = _safercar_authority_out(row)
+    if safercar_authority:
+        candidate["safercar_authority"] = safercar_authority
     return candidate
+
+
+def _ensure_overlay_columns(connection: Any) -> None:
+    rows = connection.execute(text(f"PRAGMA table_info({RATING_CANDIDATE_TABLE})")).mappings().all()
+    existing = {str(row["name"]) for row in rows}
+    required: dict[str, str] = {}
+    required.update({name: _sqlite_upgrade_type(ddl) for name, ddl in BASE_COLUMNS.items()})
+    required.update({db_column: "TEXT" for db_column in RATING_FIELD_MAP.values()})
+    required.update(SAFERCAR_ROLLOVER_COLUMNS)
+    required.update(SAFERCAR_AUTHORITY_COLUMNS)
+    for column, sql_type in required.items():
+        if column not in existing:
+            connection.execute(
+                text(f"ALTER TABLE {RATING_CANDIDATE_TABLE} ADD COLUMN {column} {sql_type}")
+            )
+
+
+def _sqlite_upgrade_type(ddl: str) -> str:
+    return ddl.split()[0] if ddl else "TEXT"
+
+
+def _official_rollover_out(row: RowMapping) -> dict[str, object] | None:
+    rating = _normalize_rating_placeholder(
+        "rollover_rating", _row_value(row, "rollover_rating")
+    ) or _normalize_rating_placeholder("rollover_stars", _row_value(row, "rollover_stars"))
+    possibility = _normalize_rating_placeholder(
+        "rollover_possibility", _row_value(row, "rollover_possibility")
+    ) or _normalize_rating_placeholder(
+        "safercar_rollover_possibility",
+        _row_value(row, "safercar_rollover_possibility"),
+    )
+    dynamic_tip_result = _normalize_rating_placeholder(
+        "dynamic_tip_result", _row_value(row, "dynamic_tip_result")
+    ) or _normalize_rating_placeholder(
+        "safercar_dynamic_tip_result", _row_value(row, "safercar_dynamic_tip_result")
+    )
+    payload = {
+        "authority": "nhtsa_safety_ratings_api_and_safercar_csv_import",
+        "rating": rating,
+        "possibility": possibility,
+        "dynamic_tip_result": dynamic_tip_result,
+        "static_stability_factor": _normalize_rating_placeholder(
+            "static_stability_factor", _row_value(row, "static_stability_factor")
+        ),
+        "rollover_stars": _normalize_rating_placeholder(
+            "rollover_stars", _row_value(row, "rollover_stars")
+        ),
+        "safety_concern": _row_value(row, "roll_safety_concern"),
+        "foot_notes": _row_value(row, "roll_foot_notes"),
+        "source_file": _row_value(row, "safercar_source_file"),
+        "source_sha256": _row_value(row, "safercar_source_sha256"),
+    }
+    if any(value not in (None, "") for key, value in payload.items() if key != "authority"):
+        return payload
+    return None
+
+
+def _safercar_authority_out(row: RowMapping) -> dict[str, object] | None:
+    fields = str(_row_value(row, "safercar_authority_fields") or "")
+    source_sha = _row_value(row, "safercar_authority_source_sha256")
+    if not fields and not source_sha:
+        return None
+    test_reference_payload = _json_value(row, "safercar_test_reference_payload_json", {})
+    return {
+        "authority": "nhtsa_safercar_csv_authoritative_import",
+        "applied_at": _row_value(row, "safercar_authority_applied_at"),
+        "source_file": _row_value(row, "safercar_authority_source_file"),
+        "source_sha256": source_sha,
+        "source_row_index": _row_value(row, "safercar_authority_source_row_index"),
+        "fields": [field for field in fields.split(";") if field],
+        "overrides": _json_value(row, "safercar_authority_overrides_json", []),
+        "rating_payload": _json_value(row, "safercar_rating_payload_json", {}),
+        "feature_payload": _json_value(row, "safercar_feature_payload_json", {}),
+        "test_reference_payload": test_reference_payload,
+        "test_reference_bridge": _safercar_test_reference_bridge(test_reference_payload),
+        "injury_metric_payload": _json_value(
+            row, "safercar_injury_metric_payload_json", {}
+        ),
+    }
+
+
+def _safercar_test_reference_bridge(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict):
+        return None
+    component_tests: list[dict[str, str]] = []
+    download_prefill: list[str] = []
+    for component, prefix in SAFERCAR_REFERENCE_COMPONENTS:
+        test_no = str(payload.get(f"{prefix}_TEST_NO") or "").strip()
+        if not test_no:
+            continue
+        if test_no not in download_prefill:
+            download_prefill.append(test_no)
+        component_tests.append(
+            {
+                "component": component,
+                "test_no": test_no,
+                "vin": str(payload.get(f"{prefix}_VIN") or "").strip(),
+                "tested_with": str(payload.get(f"{prefix}_TESTED_WITH") or "").strip(),
+            }
+        )
+    if not component_tests:
+        return None
+    return {
+        "role": "official_safercar_rating_provenance",
+        "download_prefill_test_numbers": download_prefill,
+        "component_tests": component_tests,
+        "explainer": _safercar_reference_explainer(component_tests),
+    }
+
+
+def _safercar_reference_explainer(component_tests: list[dict[str, str]]) -> str:
+    phrases = [
+        f"{item['component']} test #{item['test_no']}"
+        for item in component_tests
+        if item.get("test_no")
+    ]
+    if not phrases:
+        return "Official Safercar rating references official component tests."
+    if len(phrases) == 1:
+        joined = phrases[0]
+    elif len(phrases) == 2:
+        joined = f"{phrases[0]} and {phrases[1]}"
+    else:
+        joined = f"{', '.join(phrases[:-1])}, and {phrases[-1]}"
+    return f"Official Safercar rating references {joined}."
+
+
+def _json_value(row: RowMapping, key: str, default: object) -> object:
+    raw = _row_value(row, key)
+    if not raw:
+        return default
+    try:
+        return json.loads(str(raw))
+    except json.JSONDecodeError:
+        return default
+
+
+def _row_value(row: RowMapping, key: str) -> object | None:
+    return row[key] if key in row else None
 
 
 def _selection_status(match_confidence: str) -> str:

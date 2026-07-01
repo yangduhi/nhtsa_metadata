@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import sqlite3
@@ -59,6 +60,24 @@ RATING_FIELDS = [
     "InvestigationCount",
 ]
 
+SAFERCAR_ROLLOVER_FIELDS = [
+    "STATIC_STABI_FACTOR",
+    "TIP",
+    "ROLLOVER_POSSIBILITY",
+    "ROLLOVER_STARS",
+    "ROLL_SAFETY_CONCERN",
+    "ROLL_FOOT_NOTES",
+    "safercar_source_file",
+    "safercar_source_sha256",
+    "safercar_source_row_index",
+]
+
+SAFERCAR_YEAR_FIELDS = ("MODEL_YR", "MODEL_YEAR", "YEAR", "MY")
+SAFERCAR_MAKE_FIELDS = ("MAKE", "VEH_MAKE", "MFR_NAME")
+SAFERCAR_MODEL_FIELDS = ("MODEL", "VEH_MODEL")
+SAFERCAR_VEHICLE_ID_FIELDS = ("VehicleId", "VEHICLE_ID", "RATING_VEHICLE_ID")
+SAFERCAR_SELECTION_FIELDS = ("BODY_STYLE", "DRIVE_TRAIN", "PRODUCTION_RELEASE")
+
 
 @dataclass(frozen=True)
 class SubjectVehicle:
@@ -92,6 +111,31 @@ def clean(value: Any) -> str:
 
 def upper_clean(value: Any) -> str:
     return clean(value).upper()
+
+
+def repair_safercar_rollover_row(row: dict[str, str]) -> None:
+    risk = clean(row.get("ROLLOVER_POSSIBILITY"))
+    ssf = clean(row.get("STATIC_STABI_FACTOR"))
+    tip = clean(row.get("TIP"))
+    concern = clean(row.get("ROLL_SAFETY_CONCERN"))
+    if (
+        not _number_in_range(risk, 0, 1)
+        and _number_in_range(ssf, 0, 1)
+        and _number_in_range(tip, 0.5, 3)
+        and upper_clean(concern) in {"TIP", "NO TIP"}
+    ):
+        row["ROLLOVER_POSSIBILITY"] = ssf
+        row["STATIC_STABI_FACTOR"] = tip
+        row["TIP"] = concern
+        row["ROLL_SAFETY_CONCERN"] = ""
+
+
+def _number_in_range(value: Any, low: float, high: float) -> bool:
+    try:
+        number = float(clean(value))
+    except ValueError:
+        return False
+    return low < number < high
 
 
 def is_key_ready_values(make: Any, model: Any, model_year: Any) -> bool:
@@ -680,6 +724,147 @@ def json_dumps_compact(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _first_present(row: dict[str, Any], names: tuple[str, ...]) -> str:
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return clean(value)
+    return ""
+
+
+def _safercar_key(year: Any, make: Any, model: Any) -> tuple[str, str, str]:
+    return (clean(year), norm_text(make), norm_text(model))
+
+
+class SafercarRolloverIndex:
+    def __init__(self, rows_by_key: dict[tuple[str, str, str], list[dict[str, str]]]) -> None:
+        self.rows_by_key = rows_by_key
+
+    def lookup(
+        self,
+        subject: SubjectVehicle,
+        *,
+        rating_vehicle_id: int | str | None,
+        rating_vehicle_description: str,
+    ) -> dict[str, str]:
+        keys = [
+            _safercar_key(subject.model_year, subject.make, subject.model),
+            _safercar_key(
+                subject.model_year,
+                subject.make,
+                model_from_description(rating_vehicle_description),
+            ),
+        ]
+        seen: set[tuple[str, str, str]] = set()
+        for key in keys:
+            if key in seen:
+                continue
+            seen.add(key)
+            rows = self.rows_by_key.get(key, [])
+            if not rows:
+                continue
+            selected = _select_safercar_row(
+                rows,
+                rating_vehicle_id,
+                rating_vehicle_description=rating_vehicle_description,
+            )
+            return {field: selected.get(field, "") for field in SAFERCAR_ROLLOVER_FIELDS}
+        return {}
+
+
+def model_from_description(description: str) -> str:
+    # SafetyRatings descriptions normally begin with model year + make + model.
+    # Use this only as a fallback because DB subject model is the primary key.
+    parts = clean(description).split()
+    if len(parts) >= 3 and parts[0].isdigit():
+        return parts[2]
+    return ""
+
+
+def _select_safercar_row(
+    rows: list[dict[str, str]],
+    rating_vehicle_id: int | str | None,
+    *,
+    rating_vehicle_description: str,
+) -> dict[str, str]:
+    wanted = clean(rating_vehicle_id)
+    if wanted:
+        for row in rows:
+            if any(clean(row.get(field)) == wanted for field in SAFERCAR_VEHICLE_ID_FIELDS):
+                return row
+    description = upper_clean(rating_vehicle_description)
+    return max(rows, key=lambda row: _safercar_variant_score(row, description))
+
+
+def _safercar_variant_score(row: dict[str, str], description: str) -> int:
+    score = 0
+    drive = upper_clean(row.get("DRIVE_TRAIN"))
+    body = upper_clean(row.get("BODY_STYLE"))
+    release = upper_clean(row.get("PRODUCTION_RELEASE"))
+    for token in ("AWD", "FWD", "RWD", "4WD", "4X2", "4X4"):
+        if token and token in drive and token in description:
+            score += 20
+    if drive and drive in description:
+        score += 10
+    release_reason = _production_release_reason(release, description)
+    if release_reason:
+        score += 15
+    if body and body in description:
+        score += 5
+    elif release and release in description:
+        score += 3
+    return score
+
+
+def _production_release_reason(release: str, description: str) -> str:
+    if not release:
+        return ""
+    if "LATER RELEASE" in description or "LATE RELEASE" in description:
+        return "release:LATER" if release in {"2", "LATER", "LATE"} else ""
+    if "EARLY RELEASE" in description:
+        return "release:EARLY" if release in {"1", "EARLY"} else ""
+    return ""
+
+
+def load_safercar_rollover_index(path: Path) -> SafercarRolloverIndex:
+    raw = path.read_text(encoding="utf-8-sig")
+    sample = raw[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",\t|")
+    except csv.Error:
+        dialect = csv.excel
+    source_hash = sha256_file(path)
+    rows_by_key: dict[tuple[str, str, str], list[dict[str, str]]] = {}
+    reader = csv.DictReader(raw.splitlines(), dialect=dialect)
+    for row_index, raw_row in enumerate(reader, start=1):
+        normalized = {str(key or "").strip(): clean(value) for key, value in raw_row.items()}
+        upper_row = {key.upper(): value for key, value in normalized.items()}
+        repair_safercar_rollover_row(upper_row)
+        year = _first_present(upper_row, SAFERCAR_YEAR_FIELDS)
+        make = _first_present(upper_row, SAFERCAR_MAKE_FIELDS)
+        model = _first_present(upper_row, SAFERCAR_MODEL_FIELDS)
+        if not (year and make and model):
+            continue
+        out = {field: upper_row.get(field, "") for field in SAFERCAR_ROLLOVER_FIELDS}
+        out["safercar_source_file"] = str(path)
+        out["safercar_source_sha256"] = source_hash
+        out["safercar_source_row_index"] = str(row_index)
+        for field in SAFERCAR_VEHICLE_ID_FIELDS:
+            out[field] = upper_row.get(field.upper(), "")
+        for field in SAFERCAR_SELECTION_FIELDS:
+            out[field] = upper_row.get(field, "")
+        rows_by_key.setdefault(_safercar_key(year, make, model), []).append(out)
+    return SafercarRolloverIndex(rows_by_key)
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as f:
@@ -698,6 +883,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
     client = ApiClient(allow_live=args.allow_live, cache_path=cache_path, sleep_s=args.sleep)
     subjects = query_subject_vehicles(db_path, limit=args.limit)
+    safercar_index = (
+        load_safercar_rollover_index(Path(args.safercar_csv)) if args.safercar_csv else None
+    )
     candidate_rows: list[dict[str, Any]] = []
     per_subject_rows: list[dict[str, Any]] = []
     unmatched_rows: list[dict[str, Any]] = []
@@ -820,6 +1008,14 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             detail = candidate["detail"]
             for field in RATING_FIELDS:
                 row[field] = detail.get(field)
+            if safercar_index is not None:
+                row.update(
+                    safercar_index.lookup(
+                        subject,
+                        rating_vehicle_id=candidate["vehicle_id"],
+                        rating_vehicle_description=candidate["vehicle_description"],
+                    )
+                )
             candidate_rows.append(row)
         top = scored_candidates[0]
         top_detail = top["detail"]
@@ -845,6 +1041,14 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         )
         for field in RATING_FIELDS:
             summary_row[field] = top_detail.get(field)
+        if safercar_index is not None:
+            summary_row.update(
+                safercar_index.lookup(
+                    subject,
+                    rating_vehicle_id=top["vehicle_id"],
+                    rating_vehicle_description=top["vehicle_description"],
+                )
+            )
         per_subject_rows.append(summary_row)
         if idx % args.progress_every == 0:
             print(
@@ -880,6 +1084,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "vpic_body_class",
         "vpic_drive_type",
         *RATING_FIELDS,
+        *SAFERCAR_ROLLOVER_FIELDS,
     ]
     summary_fields = subject_fields() + [
         "cohort",
@@ -901,6 +1106,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "vpic_body_class",
         "vpic_drive_type",
         *RATING_FIELDS,
+        *SAFERCAR_ROLLOVER_FIELDS,
     ]
     unmatched_fields = subject_fields() + [
         "unmatched_reason",
@@ -1044,6 +1250,8 @@ def subject_summary_row(
     )
     for field in RATING_FIELDS:
         row[field] = ""
+    for field in SAFERCAR_ROLLOVER_FIELDS:
+        row[field] = ""
     return row
 
 
@@ -1052,6 +1260,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--db", default=str(DEFAULT_DB), help="SQLite DB path; opened read-only")
     parser.add_argument("--outdir", default=str(DEFAULT_OUTDIR), help="Artifact output directory")
     parser.add_argument("--cache", default=None, help="API cache JSON path")
+    parser.add_argument(
+        "--safercar-csv",
+        default=None,
+        help="Optional Safercar bulk CSV to import official SSF/TIP rollover fields",
+    )
     parser.add_argument(
         "--allow-live", action="store_true", help="Allow public NHTSA/vPIC API calls"
     )
